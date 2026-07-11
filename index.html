@@ -148,6 +148,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   margin-right:4px;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ── PRESENCE / CONNECTION ── */
+.conn-badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;
+  padding:2px 7px;border-radius:10px;font-weight:600;margin-left:4px}
+.conn-wifi{background:rgba(34,197,94,.2);color:#16a34a}
+.conn-cell{background:rgba(249,115,22,.2);color:#ea580c}
+.conn-off{background:rgba(156,163,175,.2);color:#9ca3af}
+.online-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot-wifi{background:#22c55e}
+.dot-cell{background:#f97316}
+.dot-off{background:#9ca3af}
+.presence-bar{padding:6px 12px;border-bottom:1px solid var(--border);
+  font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.presence-user{display:flex;align-items:center;gap:4px;
+  background:var(--bg);border-radius:10px;padding:2px 8px;font-size:11px}
+
+/* ── WIFI BLOCK ── */
+.wifi-block{flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;padding:32px 24px;background:var(--bg);text-align:center}
+.wifi-block .icon{font-size:72px}
+.wifi-block h2{font-size:22px;font-weight:800;color:var(--purple)}
+.wifi-block p{color:var(--muted);font-size:15px;max-width:300px;line-height:1.6}
+
 /* MOBILE */
 @media(max-width:600px){
   .sidebar{width:100%;position:absolute;z-index:10;height:100dvh;
@@ -159,6 +181,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 </style>
 </head>
 <body>
+
+<!-- ══ PANTALLA: BLOQUEO WIFI (solo Kiomi) ══ -->
+<div class="screen wifi-block" id="s-wifi-block">
+  <div class="icon">📵</div>
+  <h2>Solo WiFi</h2>
+  <p>Kiomi, esta app solo funciona cuando estás conectada a WiFi.<br>Conéctate a tu red WiFi e inténtalo de nuevo.</p>
+  <button class="btn" style="max-width:240px" onclick="checkWifiAndEnter()">Reintentar 🔄</button>
+  <button class="btn-sec" style="max-width:240px" onclick="logout()">Salir</button>
+</div>
 
 <!-- ══ PANTALLA: PRIMERA VEZ (token) ══ -->
 <div class="screen setup active" id="s-token">
@@ -238,7 +269,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     <div class="chat-header">
       <img src="public/icons/kiomi_icon.png" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.4)"/>
       <div class="info">
-        <div class="hname">Kiomi 🌸</div>
+        <div class="hname">Kiomi 🌸 <span id="g-conn-badge"></span></div>
         <div class="hsub" id="g-status">Cargando…</div>
       </div>
       <button class="logout-btn" onclick="logout()">⚙️</button>
@@ -264,6 +295,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <span class="hname">Kiomi Chat</span>
         <span class="badge" id="k-unread-total" style="display:none">0</span>
       </div>
+      <div class="presence-bar" id="k-presence-bar" style="display:none"></div>
       <div class="sidebar-search">
         <input id="k-search" type="text" placeholder="🔍 Buscar…" oninput="filterConvs()"/>
       </div>
@@ -446,7 +478,7 @@ window.addEventListener('load', () => {
   isKiomi= localStorage.getItem('kc_is_kiomi')==='1';
 
   if(!token){ show('s-token'); return; }
-  if(myName && isKiomi){ enterKiomiChat(); return; }
+  if(myName && isKiomi){ checkWifiAndEnter(); return; }
   if(myName && !isKiomi){ enterGuestChat(); return; }
   show('s-who');
 });
@@ -491,12 +523,13 @@ function enterKiomi() {
   isKiomi = true;
   localStorage.setItem('kc_name','Kiomi');
   localStorage.setItem('kc_is_kiomi','1');
-  enterKiomiChat();
+  checkWifiAndEnter();
 }
 
 function logout() {
   if(!confirm('¿Salir del chat?')) return;
   clearInterval(pollTimer);
+  clearInterval(presenceTimer);
   localStorage.removeItem('kc_name');
   localStorage.removeItem('kc_is_kiomi');
   myName=''; isKiomi=false; activeConv=null; convCache={};
@@ -511,6 +544,7 @@ function enterGuestChat() {
   show('s-guest-chat');
   loadGuestMessages(true);
   pollTimer = setInterval(()=>loadGuestMessages(false), 8000);
+  startPresenceHeartbeat();
 }
 
 async function loadGuestMessages(initial) {
@@ -577,6 +611,7 @@ function enterKiomiChat() {
   show('s-kiomi-chat');
   loadAllConvs(true);
   pollTimer = setInterval(()=>loadAllConvs(false), 8000);
+  startPresenceHeartbeat();
 }
 
 async function loadAllConvs(initial) {
@@ -714,6 +749,121 @@ async function kiomiSend() {
   } finally {
     sending=false; $('k-send-btn').disabled=false;
   }
+}
+
+// ══════════════════════════════════════════
+//  CONEXIÓN / PRESENCIA
+// ══════════════════════════════════════════
+const PRESENCE_PATH = 'conversations/presence.json';
+const PRESENCE_TTL  = 3 * 60 * 1000; // 3 min = offline
+let presenceTimer = null;
+
+function getConnectionType() {
+  const nc = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (!nc) return 'unknown';
+  const t = nc.type;
+  if (t === 'wifi' || t === 'ethernet') return 'wifi';
+  if (t === 'cellular' || t === '2g' || t === '3g' || t === '4g' || t === '5g') return 'cellular';
+  // fallback: use effectiveType
+  const et = nc.effectiveType;
+  if (et === '4g' && nc.downlink > 5) return 'wifi'; // likely wifi
+  if (et) return 'cellular';
+  return 'unknown';
+}
+
+function connIcon(conn) {
+  if (conn === 'wifi')     return '📶';
+  if (conn === 'cellular') return '📡';
+  return '❓';
+}
+
+function connBadgeHtml(conn) {
+  if (conn === 'wifi')
+    return `<span class="conn-badge conn-wifi"><span class="online-dot dot-wifi"></span>WiFi</span>`;
+  if (conn === 'cellular')
+    return `<span class="conn-badge conn-cell"><span class="online-dot dot-cell"></span>Datos</span>`;
+  return `<span class="conn-badge conn-off"><span class="online-dot dot-off"></span>?</span>`;
+}
+
+async function loadPresenceData() {
+  try {
+    const data = await ghGet(PRESENCE_PATH);
+    if (!data) return {};
+    const text = decodeURIComponent(escape(atob(data.content.replace(/\n/g,''))));
+    return JSON.parse(text || '{}');
+  } catch(e) { return {}; }
+}
+
+async function updatePresence() {
+  try {
+    const conn = getConnectionType();
+    const existing = await ghGet(PRESENCE_PATH);
+    let presence = {};
+    let sha = null;
+    if (existing) {
+      sha = existing.sha;
+      try { presence = JSON.parse(decodeURIComponent(escape(atob(existing.content.replace(/\n/g,''))))); } catch(e){}
+    }
+    if (!presence.users) presence.users = {};
+    presence.users[myName] = { ts: Date.now(), conn };
+    await ghPut(PRESENCE_PATH, JSON.stringify(presence), sha, `presence ${myName}`);
+  } catch(e) { /* silencioso */ }
+}
+
+function isOnline(entry) {
+  return entry && (Date.now() - entry.ts) < PRESENCE_TTL;
+}
+
+async function refreshPresence() {
+  const presence = await loadPresenceData();
+  const users = presence.users || {};
+
+  if (isKiomi) {
+    // Mostrar barra de presencia en sidebar
+    const bar = $('k-presence-bar');
+    const online = Object.entries(users).filter(([n,v]) => n !== 'Kiomi' && isOnline(v));
+    if (online.length === 0) {
+      bar.style.display = 'none';
+    } else {
+      bar.style.display = 'flex';
+      bar.innerHTML = '<span style="font-size:11px;margin-right:4px">En línea:</span>' +
+        online.map(([n,v]) =>
+          `<span class="presence-user">${connIcon(v.conn)} ${esc(n)}</span>`
+        ).join('');
+    }
+  } else {
+    // Mostrar si Kiomi está online en el header del guest
+    const kiomiEntry = users['Kiomi'];
+    const badge = $('g-conn-badge');
+    if (badge) {
+      if (isOnline(kiomiEntry)) {
+        badge.innerHTML = connBadgeHtml(kiomiEntry.conn);
+        $('g-status').textContent = 'En línea';
+      } else {
+        badge.innerHTML = '';
+        $('g-status').textContent = 'Escríbele a Kiomi';
+      }
+    }
+  }
+}
+
+function startPresenceHeartbeat() {
+  updatePresence();
+  refreshPresence();
+  presenceTimer = setInterval(() => {
+    updatePresence();
+    refreshPresence();
+  }, 60000);
+}
+
+// Verificar WiFi para Kiomi y entrar
+function checkWifiAndEnter() {
+  const conn = getConnectionType();
+  if (conn === 'cellular') {
+    show('s-wifi-block');
+    return;
+  }
+  enterKiomiChat();
 }
 </script>
 </body>
