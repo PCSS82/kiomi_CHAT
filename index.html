@@ -359,6 +359,15 @@ let convCache = {};     // { guestName: { messages, sha, lastSeen } }
 let pollTimer = null;
 let sending   = false;
 
+function pollInterval() {
+  return getConnectionType() === 'wifi' ? 2000 : 10000;
+}
+
+function restartPoll(fn) {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(fn, pollInterval());
+}
+
 // ══════════════════════════════════════════
 //  UTILS
 // ══════════════════════════════════════════
@@ -543,18 +552,21 @@ function logout() {
 function enterGuestChat() {
   show('s-guest-chat');
   loadGuestMessages(true);
-  pollTimer = setInterval(()=>loadGuestMessages(false), 8000);
+  restartPoll(()=>loadGuestMessages(false));
   startPresenceHeartbeat();
 }
 
 async function loadGuestMessages(initial) {
-  $('g-sync').innerHTML='<span class="spin"></span>Actualizando…';
+  if(initial) $('g-sync').innerHTML='<span class="spin"></span>Actualizando…';
   try {
     const { messages, sha } = await loadConv(myName);
-    convCache[myName] = { messages, sha };
-    renderGuestMessages(messages);
+    const prev = convCache[myName];
+    if(!prev || prev.sha !== sha || initial) {
+      convCache[myName] = { messages, sha };
+      renderGuestMessages(messages);
+    }
     const t = new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
-    $('g-sync').textContent = `✓ Actualizado ${t}`;
+    $('g-sync').textContent = `✓ ${t}`;
     $('g-status').textContent = messages.length ? 'Conversación activa' : 'Escríbele a Kiomi';
   } catch(e) {
     $('g-sync').textContent = '⚠️ Sin conexión';
@@ -610,7 +622,7 @@ let allConvNames = [];
 function enterKiomiChat() {
   show('s-kiomi-chat');
   loadAllConvs(true);
-  pollTimer = setInterval(()=>loadAllConvs(false), 8000);
+  restartPoll(()=>loadAllConvs(false));
   startPresenceHeartbeat();
 }
 
@@ -624,11 +636,12 @@ async function loadAllConvs(initial) {
     for(const name of names) {
       const prev = convCache[name];
       const { messages, sha } = await loadConv(name);
+      const changed = !prev || prev.sha !== sha;
       const lastSeen = prev?.lastSeen || 0;
       const unread   = messages.filter(m=>m.from!=='Kiomi'&&m.ts>lastSeen).length;
       convCache[name] = { messages, sha, lastSeen: prev?.lastSeen||0, unread };
       unreadTotal += unread;
-      if(activeConv===name) renderKiomiMessages(messages);
+      if(activeConv===name && changed) renderKiomiMessages(messages);
     }
 
     renderConvList();
