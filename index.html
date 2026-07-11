@@ -8,7 +8,8 @@
 <meta name="theme-color" content="#7c3aed"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-title" content="Kiomi Chat"/>
-<link rel="apple-touch-icon" href="public/icons/icon-512.svg"/>
+<link rel="apple-touch-icon" href="public/icons/kiomi_icon.png"/>
+<link rel="icon" href="public/icons/kiomi_icon.png"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -80,7 +81,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 
 <!-- PANTALLA 1: Token de GitHub -->
 <div class="setup active" id="s-token">
-  <div class="logo">🌸</div>
+  <div class="logo"><img src="public/icons/kiomi_icon.png" alt="Kiomi" style="width:100px;height:100px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 4px #fff,0 0 0 7px #ec4899"/></div>
   <h1>Kiomi Chat</h1>
   <p>Para que los mensajes queden guardados en GitHub necesitas pegar tu token una sola vez.</p>
   <input id="inp-token" type="password" placeholder="ghp_TuTokenDeGitHub..." autocomplete="off"/>
@@ -102,7 +103,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <!-- PANTALLA DE CHAT -->
 <div class="chat-wrap" id="s-chat">
   <div class="chat-header">
-    <div class="av">🌸</div>
+    <div class="av"><img src="public/icons/kiomi_icon.png" style="width:40px;height:40px;border-radius:50%;object-fit:cover"/></div>
     <div class="info">
       <div class="name">Kiomi Chat</div>
       <div class="status" id="hdr-status">Cargando…</div>
