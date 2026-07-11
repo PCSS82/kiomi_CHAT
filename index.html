@@ -84,6 +84,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .sidebar-empty{flex:1;display:flex;align-items:center;justify-content:center;
   flex-direction:column;gap:8px;color:var(--muted);font-size:14px;padding:20px}
 
+/* ── FAMILY GRID ── */
+.family-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:340px}
+.family-btn{display:flex;flex-direction:column;align-items:center;gap:8px;
+  padding:14px 8px;background:var(--card);border:2px solid var(--border);
+  border-radius:16px;cursor:pointer;transition:all .15s;font-family:inherit}
+.family-btn:hover,.family-btn:active{border-color:var(--purple);background:var(--bg);transform:scale(.97)}
+.family-btn .fav{width:56px;height:56px;border-radius:50%;background:var(--grad);
+  display:flex;align-items:center;justify-content:center;font-size:26px;color:#fff;font-weight:700}
+.family-btn .fname{font-size:13px;font-weight:600;color:var(--text)}
+.divider-or{display:flex;align-items:center;gap:10px;color:var(--muted);
+  font-size:12px;width:100%;max-width:340px}
+.divider-or::before,.divider-or::after{content:'';flex:1;height:1px;background:var(--border)}
+
 /* ── CHAT PANEL ── */
 .chat-panel{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
 .chat-header{background:var(--header);color:#fff;padding:12px 16px;
@@ -170,11 +183,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 <!-- ══ PANTALLA: GUEST (solo nombre) ══ -->
 <div class="screen setup" id="s-guest">
   <img class="kiomi-avatar" src="public/icons/kiomi_icon.png" alt="Kiomi"/>
-  <h1>Hablar con Kiomi</h1>
-  <p>Escribe tu nombre para empezar el chat.</p>
-  <input id="inp-guest-name" type="text" placeholder="Tu nombre (ej: Mamá, Papá, Ana…)" maxlength="20" autocomplete="off"/>
+  <h1>¿Quién eres? 👋</h1>
+  <p>Toca tu nombre para entrar al chat con Kiomi.</p>
+
+  <div class="family-grid">
+    <button class="family-btn" onclick="quickEnter('Koji')">
+      <div class="fav">🦁</div>
+      <span class="fname">Koji</span>
+    </button>
+    <button class="family-btn" onclick="quickEnter('Ami')">
+      <div class="fav">🌙</div>
+      <span class="fname">Ami</span>
+    </button>
+    <button class="family-btn" onclick="quickEnter('Mamá')">
+      <div class="fav">💜</div>
+      <span class="fname">Mamá</span>
+    </button>
+    <button class="family-btn" onclick="quickEnter('Papá')">
+      <div class="fav">💙</div>
+      <span class="fname">Papá</span>
+    </button>
+    <button class="family-btn" onclick="quickEnter('Abuela')">
+      <div class="fav">🌺</div>
+      <span class="fname">Abuela</span>
+    </button>
+    <button class="family-btn" onclick="quickEnter('Abuelo')">
+      <div class="fav">⭐</div>
+      <span class="fname">Abuelo</span>
+    </button>
+  </div>
+
+  <div class="divider-or">otro</div>
+
+  <input id="inp-guest-name" type="text" placeholder="Escribe tu nombre…" maxlength="20" autocomplete="off"/>
   <p class="err" id="err-guest"></p>
-  <button class="btn" onclick="enterGuest()">Entrar al chat ✨</button>
+  <button class="btn" onclick="enterGuest()">Entrar ✨</button>
   <button class="btn-sec" onclick="show('s-who')">← Atrás</button>
 </div>
 
@@ -425,15 +468,19 @@ function saveToken() {
   show('s-who');
 }
 
+function quickEnter(name) {
+  myName  = name;
+  isKiomi = false;
+  localStorage.setItem('kc_name', name);
+  localStorage.setItem('kc_is_kiomi','0');
+  enterGuestChat();
+}
+
 function enterGuest() {
   const n = $('inp-guest-name').value.trim();
   if(!n||n.length<2){ $('err-guest').textContent='Escribe al menos 2 letras'; return; }
   if(n.toLowerCase()==='kiomi'){ $('err-guest').textContent='Ese nombre es de Kiomi 😊 elige otro'; return; }
-  myName  = n;
-  isKiomi = false;
-  localStorage.setItem('kc_name', n);
-  localStorage.setItem('kc_is_kiomi','0');
-  enterGuestChat();
+  quickEnter(n);
 }
 
 function enterKiomi() {
