@@ -121,6 +121,7 @@ function startChat(user) {
   initSocket();
   loadRooms();
   loadUsers();
+  checkSyncStatus();
 }
 
 /* ===== SOCKET ===== */
@@ -475,6 +476,32 @@ function showChatPanel() {
   $('chat-empty').classList.add('hidden');
   $('chat-active').classList.remove('hidden');
 }
+
+/* ===== SYNC STATUS ===== */
+async function checkSyncStatus() {
+  try {
+    const res = await fetch('/api/sync-status');
+    if (!res.ok) return;
+    const { githubConfigured, lastSync, pending } = await res.json();
+    const dot   = $('sync-dot');
+    const label = $('sync-label');
+    if (!githubConfigured) {
+      dot.className = 'sync-dot err';
+      label.textContent = 'GitHub no configurado';
+      return;
+    }
+    dot.className = 'sync-dot ok';
+    if (lastSync) {
+      const d = new Date(lastSync);
+      label.textContent = `GitHub ✓ — último sync ${d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+      label.textContent = `GitHub ✓ — ${pending} msg por guardar`;
+    }
+  } catch { /* sin conexión */ }
+}
+
+// Revisar estado al abrir y cada 60 s
+setInterval(checkSyncStatus, 60_000);
 
 /* ===== XSS ESCAPE ===== */
 function escapeHtml(str) {

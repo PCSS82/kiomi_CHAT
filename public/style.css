@@ -283,6 +283,16 @@ input[type="text"]:focus { border-color: var(--primary); background: #fff; }
 .modal-card h3 { margin-bottom: 16px; font-size: 18px; color: var(--primary-dark); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 
+/* ===== SYNC STATUS ===== */
+.sync-status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text-muted); padding: 6px 16px;
+  border-top: 1px solid var(--border);
+}
+.sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
+.sync-dot.ok { background: var(--primary); }
+.sync-dot.err { background: #EF233C; }
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 640px) {
   .sidebar { width: 100%; max-width: 100%; position: absolute; z-index: 10; transform: translateX(-100%); transition: transform .3s; }
