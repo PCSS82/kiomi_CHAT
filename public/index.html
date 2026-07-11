@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Kiomi Chat 🌸</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ===== PANTALLA DE REGISTRO / LOGIN ===== -->
+<div id="screen-auth" class="screen active">
+  <div class="auth-card">
+    <div class="auth-logo">🌸</div>
+    <h1 class="auth-title">Kiomi Chat</h1>
+    <p class="auth-sub">Chat seguro para amigos y familia</p>
+
+    <div id="auth-tabs" class="tabs">
+      <button class="tab active" data-tab="register">Nuevo usuario</button>
+      <button class="tab" data-tab="login">Ya tengo cuenta</button>
+    </div>
+
+    <!-- Registro -->
+    <div id="tab-register" class="tab-content active">
+      <label>Tu nombre</label>
+      <input id="reg-name" type="text" placeholder="Ej: Kiomi" maxlength="20" />
+      <label>Elige tu emoji</label>
+      <div id="avatar-picker" class="emoji-grid">
+        😊 😄 🥰 😎 🤗 🌸 🦋 🐱 🐼 🦄 🌟 🍭 🎀 🌈 🐬 🐧 🦊 🐰 🍓 🎵
+      </div>
+      <input id="reg-avatar" type="hidden" value="😊" />
+      <label>Color de tus mensajes</label>
+      <div id="color-picker" class="color-grid">
+        <div class="color-opt selected" style="background:#25D366" data-color="#25D366"></div>
+        <div class="color-opt" style="background:#7B61FF" data-color="#7B61FF"></div>
+        <div class="color-opt" style="background:#FF6B9D" data-color="#FF6B9D"></div>
+        <div class="color-opt" style="background:#FF9500" data-color="#FF9500"></div>
+        <div class="color-opt" style="background:#00B4D8" data-color="#00B4D8"></div>
+        <div class="color-opt" style="background:#EF233C" data-color="#EF233C"></div>
+      </div>
+      <input id="reg-color" type="hidden" value="#25D366" />
+      <button id="btn-register" class="btn-primary">Entrar al chat ✨</button>
+      <p id="reg-error" class="form-error"></p>
+    </div>
+
+    <!-- Login -->
+    <div id="tab-login" class="tab-content">
+      <label>Tu nombre</label>
+      <input id="login-name" type="text" placeholder="Escribe tu nombre" maxlength="20" />
+      <button id="btn-login" class="btn-primary">Entrar 🚀</button>
+      <p id="login-error" class="form-error"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PANTALLA PRINCIPAL DE CHAT ===== -->
+<div id="screen-chat" class="screen">
+  <div class="chat-layout">
+
+    <!-- Sidebar izquierdo -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div id="my-avatar" class="avatar-bubble">😊</div>
+        <span id="my-name" class="my-name-label">Kiomi</span>
+        <button id="btn-logout" class="icon-btn" title="Salir">⚙️</button>
+      </div>
+
+      <div class="search-box">
+        <input id="search-input" type="text" placeholder="🔍 Buscar..." />
+      </div>
+
+      <div class="sidebar-section-title">Salas</div>
+      <div id="rooms-list" class="list-scroll"></div>
+
+      <button id="btn-new-room" class="btn-new-room">+ Nueva sala</button>
+
+      <div class="sidebar-section-title">Personas conectadas</div>
+      <div id="users-list" class="list-scroll"></div>
+    </aside>
+
+    <!-- Panel de chat -->
+    <main class="chat-panel">
+      <div id="chat-empty" class="chat-empty">
+        <div class="empty-icon">💬</div>
+        <p>Selecciona una sala para chatear</p>
+      </div>
+
+      <div id="chat-active" class="chat-active hidden">
+        <!-- Header del chat -->
+        <div class="chat-header">
+          <div class="chat-header-info">
+            <span id="chat-room-icon">💬</span>
+            <div>
+              <div id="chat-room-name">General</div>
+              <div id="chat-room-members" class="chat-room-sub"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mensajes -->
+        <div id="messages-container" class="messages-container">
+          <div id="messages-list"></div>
+          <div id="typing-indicator" class="typing-indicator hidden"></div>
+          <div id="scroll-anchor"></div>
+        </div>
+
+        <!-- Barra de respuesta -->
+        <div id="reply-bar" class="reply-bar hidden">
+          <div class="reply-preview">
+            <span class="reply-label">Respondiendo a <strong id="reply-username"></strong></span>
+            <p id="reply-text"></p>
+          </div>
+          <button id="btn-cancel-reply" class="icon-btn">✕</button>
+        </div>
+
+        <!-- Input de mensaje -->
+        <div class="message-input-bar">
+          <div id="emoji-picker" class="emoji-popup hidden">
+            😀 😄 😂 🥰 😎 🤩 😜 🥳 😴 🤔
+            ❤️ 🧡 💛 💚 💙 💜 🖤 🤍
+            👍 👎 👏 🙌 🤝 🤜 🤛
+            🎉 🎊 🎈 🎀 🌸 🌈 ⭐ 🌟 💫
+            🍕 🍔 🌮 🍦 🍭 🍓 🍕 🎂
+            🐱 🐶 🐼 🐨 🐰 🦄 🐬 🦋
+          </div>
+          <button id="btn-emoji" class="icon-btn">😊</button>
+          <input id="msg-input" type="text" placeholder="Escribe un mensaje..." maxlength="500" autocomplete="off" />
+          <button id="btn-send" class="btn-send">➤</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Modal nueva sala -->
+<div id="modal-room" class="modal hidden">
+  <div class="modal-card">
+    <h3>Nueva sala</h3>
+    <input id="new-room-name" type="text" placeholder="Nombre de la sala" maxlength="30" />
+    <div class="modal-actions">
+      <button id="btn-room-cancel" class="btn-secondary">Cancelar</button>
+      <button id="btn-room-create" class="btn-primary">Crear</button>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
