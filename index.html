@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<title>Kiomi Chat 🌸</title>
+<link rel="manifest" href="public/manifest.json"/>
+<meta name="theme-color" content="#7c3aed"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="Kiomi Chat"/>
+<link rel="apple-touch-icon" href="public/icons/icon-512.svg"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --purple:#7c3aed;--pink:#ec4899;
+  --bg:#f5f3ff;--card:#fff;--border:#e9d5ff;
+  --text:#1e0a3c;--muted:#7c3aed;
+  --bubble-out:linear-gradient(135deg,#7c3aed,#ec4899);
+  --bubble-in:#fff;--bubble-in-text:#1e0a3c;
+  --input-bg:#f5f3ff;--header:#7c3aed;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#12071f;--card:#1e0a3c;--border:#4c1d95;
+  --text:#fdf4ff;--muted:#c4b5fd;
+  --bubble-in:#2d1254;--bubble-in-text:#fdf4ff;
+  --input-bg:#2d1254;--header:#4c1d95;
+}}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ---- SETUP SCREENS ---- */
+.setup{display:none;flex-direction:column;align-items:center;justify-content:center;height:100dvh;padding:24px;gap:16px;background:var(--bg)}
+.setup.active{display:flex}
+.logo{font-size:72px;line-height:1}
+.setup h1{font-size:28px;font-weight:800;background:linear-gradient(90deg,var(--purple),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center}
+.setup p{color:var(--muted);font-size:14px;text-align:center;max-width:320px;line-height:1.5}
+.setup input{width:100%;max-width:340px;padding:14px 18px;border:2px solid var(--border);border-radius:14px;font-size:16px;background:var(--card);color:var(--text);outline:none;transition:border-color .2s}
+.setup input:focus{border-color:var(--purple)}
+.setup small{color:var(--muted);font-size:12px;max-width:340px;text-align:center;line-height:1.5}
+.btn{padding:14px 24px;background:linear-gradient(135deg,var(--purple),var(--pink));color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;width:100%;max-width:340px;transition:opacity .15s}
+.btn:hover{opacity:.9}
+.err{color:#dc2626;font-size:13px;min-height:18px}
+
+/* ---- CHAT ---- */
+.chat-wrap{display:none;flex-direction:column;height:100dvh}
+.chat-wrap.active{display:flex}
+.chat-header{background:var(--header);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.chat-header .av{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.chat-header .info{flex:1}
+.chat-header .name{font-weight:700;font-size:16px}
+.chat-header .status{font-size:12px;opacity:.75}
+.chat-header .logout-btn{background:rgba(255,255,255,.15);border:none;color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+
+.messages{flex:1;overflow-y:auto;padding:12px 12px 4px;display:flex;flex-direction:column;gap:4px;scroll-behavior:smooth}
+.date-chip{text-align:center;margin:8px 0;font-size:11px;color:var(--muted);background:var(--border);border-radius:20px;padding:3px 12px;align-self:center}
+.msg-row{display:flex;flex-direction:column;max-width:78%;gap:2px}
+.msg-row.out{align-self:flex-end;align-items:flex-end}
+.msg-row.in{align-self:flex-start;align-items:flex-start}
+.msg-sender{font-size:11px;font-weight:600;padding:0 8px;color:var(--purple)}
+.msg-row.out .msg-sender{color:var(--pink)}
+.bubble{padding:9px 13px;border-radius:18px;font-size:15px;line-height:1.45;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.msg-row.out .bubble{background:var(--bubble-out);color:#fff;border-bottom-right-radius:4px}
+.msg-row.in .bubble{background:var(--bubble-in);color:var(--bubble-in-text);border-bottom-left-radius:4px}
+.msg-time{font-size:10px;opacity:.55;padding:0 6px}
+
+.input-bar{padding:10px 12px;display:flex;gap:8px;align-items:flex-end;background:var(--card);border-top:1px solid var(--border);flex-shrink:0}
+.input-bar textarea{flex:1;padding:10px 14px;border:2px solid var(--border);border-radius:22px;font-size:15px;background:var(--input-bg);color:var(--text);resize:none;outline:none;max-height:100px;line-height:1.4;transition:border-color .2s;font-family:inherit}
+.input-bar textarea:focus{border-color:var(--purple)}
+.send-btn{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--pink));border:none;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:transform .1s;box-shadow:0 2px 8px rgba(124,58,237,.4)}
+.send-btn:active{transform:scale(.92)}
+.send-btn:disabled{opacity:.5;cursor:default}
+
+.sync-bar{font-size:11px;color:var(--muted);text-align:center;padding:4px;flex-shrink:0}
+.spinner{display:inline-block;width:10px;height:10px;border:2px solid var(--border);border-top-color:var(--purple);border-radius:50%;animation:spin .6s linear infinite;margin-right:4px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);font-size:14px}
+.empty .big{font-size:48px}
+</style>
+</head>
+<body>
+
+<!-- PANTALLA 1: Token de GitHub -->
+<div class="setup active" id="s-token">
+  <div class="logo">🌸</div>
+  <h1>Kiomi Chat</h1>
+  <p>Para que los mensajes queden guardados en GitHub necesitas pegar tu token una sola vez.</p>
+  <input id="inp-token" type="password" placeholder="ghp_TuTokenDeGitHub..." autocomplete="off"/>
+  <small>Cómo obtenerlo: github.com/settings/tokens → Generate new token (classic) → marca "repo" → Generate token → copia y pega aquí.</small>
+  <p class="err" id="err-token"></p>
+  <button class="btn" onclick="saveToken()">Continuar →</button>
+</div>
+
+<!-- PANTALLA 2: Nombre de usuario -->
+<div class="setup" id="s-name">
+  <div class="logo">👤</div>
+  <h1>¿Cómo te llamas?</h1>
+  <p>Este nombre aparecerá en el chat.</p>
+  <input id="inp-name" type="text" placeholder="Ej: Kiomi, Mamá, Papá…" maxlength="20" autocomplete="off"/>
+  <p class="err" id="err-name"></p>
+  <button class="btn" onclick="saveName()">Entrar al chat ✨</button>
+</div>
+
+<!-- PANTALLA DE CHAT -->
+<div class="chat-wrap" id="s-chat">
+  <div class="chat-header">
+    <div class="av">🌸</div>
+    <div class="info">
+      <div class="name">Kiomi Chat</div>
+      <div class="status" id="hdr-status">Cargando…</div>
+    </div>
+    <button class="logout-btn" onclick="logout()" title="Salir">⚙️</button>
+  </div>
+
+  <div class="messages" id="messages">
+    <div class="empty"><div class="big">💬</div><span>Cargando mensajes…</span></div>
+  </div>
+
+  <div class="sync-bar" id="sync-bar"></div>
+
+  <div class="input-bar">
+    <textarea id="msg-input" placeholder="Escribe un mensaje…" rows="1" maxlength="500"
+      oninput="autoResize(this)"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"></textarea>
+    <button class="send-btn" id="send-btn" onclick="sendMsg()">➤</button>
+  </div>
+</div>
+
+<script>
+// =====================================================
+//  CONFIGURACIÓN
+// =====================================================
+const OWNER  = 'PCSS82';
+const REPO   = 'kiomi_CHAT';
+const BRANCH = 'main';
+const MSG_PATH = 'conversations/mensajes.json';   // almacén interno (JSON)
+const POLL_MS  = 8000;  // refresca cada 8 segundos
+
+// =====================================================
+//  ESTADO
+// =====================================================
+let token   = '';
+let myName  = '';
+let messages = [];
+let lastSha  = null;
+let pollTimer = null;
+let sending   = false;
+
+// =====================================================
+//  UTILS
+// =====================================================
+const $  = id => document.getElementById(id);
+function show(id) {
+  ['s-token','s-name','s-chat'].forEach(s => {
+    const el = $(s);
+    el.classList.remove('active');
+    if (el.classList.contains('chat-wrap')) el.classList.remove('active');
+    if (el.classList.contains('setup'))     el.classList.remove('active');
+  });
+  const el = $(id);
+  el.classList.add('active');
+}
+
+function esc(s) {
+  return String(s||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtTime(ts) {
+  return new Date(ts).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+}
+function fmtDate(ts) {
+  const d = new Date(ts), t = new Date();
+  const diff = (t - d) / 86400000;
+  if (diff < 1) return 'Hoy';
+  if (diff < 2) return 'Ayer';
+  return d.toLocaleDateString('es',{day:'numeric',month:'long'});
+}
+function csvDate() {
+  return new Date().toISOString().split('T')[0];
+}
+function escCsv(v) {
+  const s = String(v||'');
+  if (s.includes(',') || s.includes('"') || s.includes('\n'))
+    return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+function autoResize(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 100) + 'px';
+}
+
+// =====================================================
+//  GITHUB API
+// =====================================================
+async function ghGet(path) {
+  const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`GitHub GET ${res.status}`);
+  return res.json();
+}
+
+async function ghPut(path, content, sha, message) {
+  const body = { message, content: btoa(unescape(encodeURIComponent(content))), branch: BRANCH };
+  if (sha) body.sha = sha;
+  const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    throw new Error(err.message || `GitHub PUT ${res.status}`);
+  }
+  return res.json();
+}
+
+// =====================================================
+//  SETUP SCREENS
+// =====================================================
+window.addEventListener('load', () => {
+  token  = localStorage.getItem('kc_token') || '';
+  myName = localStorage.getItem('kc_name')  || '';
+  if (token && myName) { enterChat(); return; }
+  if (token)           { show('s-name'); $('inp-name').focus(); return; }
+  show('s-token'); $('inp-token').focus();
+});
+
+$('inp-token').addEventListener('keydown', e => { if(e.key==='Enter') saveToken(); });
+$('inp-name').addEventListener('keydown',  e => { if(e.key==='Enter') saveName(); });
+
+function saveToken() {
+  const t = $('inp-token').value.trim();
+  if (!t || !t.startsWith('ghp_') && !t.startsWith('github_pat_')) {
+    $('err-token').textContent = 'El token debe empezar con ghp_ o github_pat_'; return;
+  }
+  token = t;
+  localStorage.setItem('kc_token', t);
+  $('err-token').textContent = '';
+  show('s-name'); $('inp-name').focus();
+}
+
+function saveName() {
+  const n = $('inp-name').value.trim();
+  if (!n || n.length < 2) { $('err-name').textContent = 'Escribe al menos 2 letras'; return; }
+  myName = n;
+  localStorage.setItem('kc_name', n);
+  $('err-name').textContent = '';
+  enterChat();
+}
+
+function logout() {
+  if (!confirm('¿Salir del chat? Tu nombre y token se borrarán de este dispositivo.')) return;
+  clearInterval(pollTimer);
+  localStorage.removeItem('kc_token');
+  localStorage.removeItem('kc_name');
+  token = ''; myName = ''; messages = []; lastSha = null;
+  $('s-chat').classList.remove('active');
+  show('s-token');
+  $('inp-token').value = '';
+  $('inp-name').value = '';
+}
+
+// =====================================================
+//  CHAT
+// =====================================================
+function enterChat() {
+  show('s-chat');
+  loadMessages(true);
+  pollTimer = setInterval(() => loadMessages(false), POLL_MS);
+}
+
+async function loadMessages(initial) {
+  setSyncBar('loading');
+  try {
+    const data = await ghGet(MSG_PATH);
+    if (!data) {
+      messages = [];
+      lastSha  = null;
+      renderMessages();
+      setSyncBar('ok', 0);
+      return;
+    }
+    if (data.sha === lastSha && !initial) {
+      setSyncBar('ok', messages.length);
+      return; // sin cambios
+    }
+    lastSha = data.sha;
+    const text = decodeURIComponent(escape(atob(data.content.replace(/\n/g,''))));
+    messages = JSON.parse(text || '[]');
+    renderMessages();
+    setSyncBar('ok', messages.length);
+  } catch(e) {
+    setSyncBar('error', e.message);
+  }
+}
+
+function renderMessages() {
+  const box = $('messages');
+  if (messages.length === 0) {
+    box.innerHTML = '<div class="empty"><div class="big">💬</div><span>Aún no hay mensajes. ¡Escribe el primero!</span></div>';
+    return;
+  }
+  let html = '';
+  let lastDate = null;
+  messages.forEach(m => {
+    const d = fmtDate(m.ts);
+    if (d !== lastDate) {
+      html += `<div class="date-chip">${esc(d)}</div>`;
+      lastDate = d;
+    }
+    const out = m.user === myName;
+    html += `<div class="msg-row ${out?'out':'in'}">
+      ${!out ? `<div class="msg-sender">${esc(m.user)}</div>` : ''}
+      <div class="bubble">${esc(m.text)}</div>
+      <div class="msg-time">${fmtTime(m.ts)}</div>
+    </div>`;
+  });
+  box.innerHTML = html;
+  box.scrollTop = box.scrollHeight;
+  const n = messages.filter(m=>m.user!==myName).length;
+  $('hdr-status').textContent = `${messages.length} mensajes`;
+}
+
+async function sendMsg() {
+  const ta  = $('msg-input');
+  const txt = ta.value.trim();
+  if (!txt || sending) return;
+
+  sending = true;
+  $('send-btn').disabled = true;
+  setSyncBar('loading');
+
+  try {
+    // Leer estado actual (para obtener SHA fresco)
+    const current = await ghGet(MSG_PATH);
+    let msgs = [];
+    let sha  = null;
+    if (current) {
+      sha  = current.sha;
+      const text = decodeURIComponent(escape(atob(current.content.replace(/\n/g,''))));
+      msgs = JSON.parse(text || '[]');
+    }
+
+    const newMsg = { ts: Date.now(), user: myName, text: txt };
+    msgs.push(newMsg);
+
+    // Guardar JSON (almacén interno)
+    const jsonStr = JSON.stringify(msgs, null, 2);
+    const result  = await ghPut(MSG_PATH, jsonStr, sha, `💬 ${myName}: ${txt.slice(0,50)}`);
+
+    // Actualizar CSV del día
+    await appendCsv(newMsg);
+
+    lastSha  = result.content.sha;
+    messages = msgs;
+    ta.value = '';
+    ta.style.height = 'auto';
+    renderMessages();
+    setSyncBar('ok', messages.length);
+  } catch(e) {
+    setSyncBar('error', 'Error al enviar: ' + e.message);
+  } finally {
+    sending = false;
+    $('send-btn').disabled = false;
+  }
+}
+
+async function appendCsv(msg) {
+  try {
+    const today   = csvDate();
+    const csvPath = `conversations/kiomi_chat_${today}.csv`;
+    const line    = [escCsv(new Date(msg.ts).toISOString()), escCsv(myName), escCsv(msg.text)].join(',') + '\n';
+
+    const existing = await ghGet(csvPath);
+    let content = '';
+    let sha     = null;
+    if (existing) {
+      sha     = existing.sha;
+      content = decodeURIComponent(escape(atob(existing.content.replace(/\n/g,''))));
+    } else {
+      content = 'timestamp,usuario,mensaje\n';
+    }
+    await ghPut(csvPath, content + line, sha, `csv: ${today}`);
+  } catch { /* CSV es secundario, no interrumpir */ }
+}
+
+// =====================================================
+//  UI HELPERS
+// =====================================================
+function setSyncBar(state, info) {
+  const bar = $('sync-bar');
+  if (state === 'loading') {
+    bar.innerHTML = '<span class="spinner"></span>Sincronizando con GitHub…';
+  } else if (state === 'ok') {
+    const t = new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+    bar.textContent = `✓ GitHub · actualizado ${t}`;
+  } else {
+    bar.textContent = '⚠️ ' + info;
+  }
+}
+</script>
+</body>
+</html>
