@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
@@ -12,16 +13,25 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// --- Configuración ---
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+const GITHUB_OWNER = process.env.GITHUB_OWNER || 'PCSS82';
+const GITHUB_REPO  = process.env.GITHUB_REPO  || 'kiomi_CHAT';
+const SYNC_INTERVAL_MS = 5 * 60 * 1000; // sincronizar cada 5 minutos
+
 // --- Estado en memoria ---
-const users = new Map();       // id -> { id, username, avatar, color, socketId, online }
-const rooms = new Map();       // id -> { id, name, members: Set<userId>, messages: [] }
-const sessions = new Map();    // socketId -> userId
+const users    = new Map(); // id -> { id, username, avatar, color, socketId, online }
+const rooms    = new Map(); // id -> { id, name, members: Set<userId>, messages: [] }
+const sessions = new Map(); // socketId -> userId
 const adminPassword = bcrypt.hashSync(process.env.ADMIN_PASS || 'kiomi2024', 10);
 
-// Palabras bloqueadas (filtro básico de contenido)
+// Buffer de mensajes pendientes de sincronizar con GitHub
+const pendingLog = [];
+
+// Palabras bloqueadas
 const BLOCKED_WORDS = [
-  'odio', 'muere', 'idiota', 'estupido', 'imbecil', 'maldito',
-  'hate', 'kill', 'die', 'stupid', 'idiot',
+  'odio','muere','idiota','estupido','imbecil','maldito',
+  'hate','kill','die','stupid','idiot',
 ];
 
 function filterMessage(text) {
@@ -33,20 +43,124 @@ function filterMessage(text) {
   return filtered;
 }
 
-// Sala global por defecto
+// Sala global
 const globalRoom = { id: 'global', name: 'General', members: new Set(), messages: [] };
 rooms.set('global', globalRoom);
 
-// --- API REST ---
+/* ================================================================
+   GITHUB CSV SYNC
+   ================================================================ */
+
+function escapeCsv(val) {
+  const s = String(val == null ? '' : val);
+  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function githubRequest(method, urlPath, body) {
+  return new Promise((resolve, reject) => {
+    const payload = body ? JSON.stringify(body) : null;
+    const options = {
+      hostname: 'api.github.com',
+      path: urlPath,
+      method,
+      headers: {
+        'User-Agent': 'kiomi-chat/1.0',
+        'Authorization': `Bearer ${GITHUB_TOKEN}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    };
+    if (payload) {
+      options.headers['Content-Type'] = 'application/json';
+      options.headers['Content-Length'] = Buffer.byteLength(payload);
+    }
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch { resolve(data); }
+      });
+    });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+async function syncToGitHub() {
+  if (!GITHUB_TOKEN) {
+    if (pendingLog.length > 0) {
+      console.log('[CSV] GITHUB_TOKEN no configurado — mensajes no se guardarán en GitHub');
+    }
+    return;
+  }
+  if (pendingLog.length === 0) return;
+
+  const snapshot = pendingLog.splice(0, pendingLog.length);
+  const today = new Date().toISOString().split('T')[0];
+  const filePath = `conversations/kiomi_chat_${today}.csv`;
+  const apiPath = `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${filePath}`;
+
+  try {
+    // Obtener SHA y contenido existente
+    let sha = null;
+    let base = 'timestamp,sala,usuario,mensaje\n';
+    const existing = await githubRequest('GET', apiPath);
+    if (existing && existing.sha) {
+      sha = existing.sha;
+      base = Buffer.from(existing.content, 'base64').toString('utf8');
+    }
+
+    const newLines = snapshot.map(m =>
+      [escapeCsv(m.timestamp), escapeCsv(m.room), escapeCsv(m.username), escapeCsv(m.text)].join(',')
+    ).join('\n') + '\n';
+
+    const updatedContent = base + newLines;
+
+    const putBody = {
+      message: `chat: sync conversaciones ${today} (${snapshot.length} mensajes)`,
+      content: Buffer.from(updatedContent).toString('base64'),
+      branch: 'main',
+    };
+    if (sha) putBody.sha = sha;
+
+    const result = await githubRequest('PUT', apiPath, putBody);
+    if (result && result.content) {
+      lastSyncTime = new Date().toISOString();
+      console.log(`[CSV] ${snapshot.length} mensajes guardados en GitHub → ${filePath}`);
+    } else {
+      console.error('[CSV] Error al guardar en GitHub:', JSON.stringify(result).slice(0, 200));
+      // Devolver al buffer para reintentar
+      pendingLog.unshift(...snapshot);
+    }
+  } catch (err) {
+    console.error('[CSV] Error de red:', err.message);
+    pendingLog.unshift(...snapshot);
+  }
+}
+
+// Sincronizar periódicamente
+setInterval(syncToGitHub, SYNC_INTERVAL_MS);
+
+// Sincronizar al cerrar el servidor
+process.on('SIGTERM', async () => { await syncToGitHub(); process.exit(0); });
+process.on('SIGINT',  async () => { await syncToGitHub(); process.exit(0); });
+
+/* ================================================================
+   API REST
+   ================================================================ */
+
 app.post('/api/register', (req, res) => {
   const { username, avatar, color } = req.body;
   if (!username || username.trim().length < 2) {
     return res.status(400).json({ error: 'Nombre muy corto' });
   }
-  const existing = [...users.values()].find(u => u.username.toLowerCase() === username.toLowerCase());
-  if (existing) {
-    return res.status(409).json({ error: 'Ese nombre ya está en uso' });
-  }
+  const existing = [...users.values()].find(u => u.username.toLowerCase() === username.trim().toLowerCase());
+  if (existing) return res.status(409).json({ error: 'Ese nombre ya está en uso' });
   const id = uuidv4();
   const user = { id, username: username.trim(), avatar: avatar || '😊', color: color || '#25D366', online: false, socketId: null };
   users.set(id, user);
@@ -61,17 +175,15 @@ app.post('/api/login', (req, res) => {
 });
 
 app.get('/api/users', (req, res) => {
-  const list = [...users.values()].map(u => ({
+  res.json([...users.values()].map(u => ({
     id: u.id, username: u.username, avatar: u.avatar, color: u.color, online: u.online,
-  }));
-  res.json(list);
+  })));
 });
 
 app.get('/api/rooms', (req, res) => {
-  const list = [...rooms.values()].map(r => ({
+  res.json([...rooms.values()].map(r => ({
     id: r.id, name: r.name, memberCount: r.members.size,
-  }));
-  res.json(list);
+  })));
 });
 
 app.post('/api/rooms', (req, res) => {
@@ -82,6 +194,26 @@ app.post('/api/rooms', (req, res) => {
   rooms.set(id, room);
   io.emit('room:created', { id, name: room.name, memberCount: 0 });
   res.json({ roomId: id, room: { id, name: room.name } });
+});
+
+// Estado de sincronización (para el cliente)
+let lastSyncTime = null;
+app.get('/api/sync-status', (req, res) => {
+  res.json({
+    githubConfigured: !!GITHUB_TOKEN,
+    lastSync: lastSyncTime,
+    pending: pendingLog.length,
+  });
+});
+
+// Forzar sincronización manual (para testing)
+app.post('/api/admin/sync', async (req, res) => {
+  const { password } = req.body;
+  if (!bcrypt.compareSync(password, adminPassword)) {
+    return res.status(403).json({ error: 'Contraseña incorrecta' });
+  }
+  await syncToGitHub();
+  res.json({ ok: true, pending: pendingLog.length });
 });
 
 // Admin: eliminar mensaje
@@ -99,17 +231,19 @@ app.delete('/api/admin/message', (req, res) => {
   res.json({ ok: true });
 });
 
-// --- Socket.IO ---
+/* ================================================================
+   SOCKET.IO
+   ================================================================ */
+
 io.on('connection', (socket) => {
 
   socket.on('user:join', ({ userId, roomId = 'global' }) => {
     const user = users.get(userId);
     if (!user) return socket.emit('error', { message: 'Usuario no válido' });
 
-    // Desconectar sesión anterior si existe
     if (user.socketId && user.socketId !== socket.id) {
-      const oldSocket = io.sockets.sockets.get(user.socketId);
-      if (oldSocket) oldSocket.disconnect(true);
+      const old = io.sockets.sockets.get(user.socketId);
+      if (old) old.disconnect(true);
     }
 
     user.online = true;
@@ -120,12 +254,8 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId) || globalRoom;
     room.members.add(userId);
 
-    // Enviar historial de mensajes
     socket.emit('history', { roomId, messages: room.messages.slice(-100) });
-
-    // Avisar a todos que este usuario está en línea
     io.emit('user:status', { userId, online: true, username: user.username, avatar: user.avatar, color: user.color });
-
     socket.emit('joined', { roomId, room: { id: room.id, name: room.name } });
   });
 
@@ -134,11 +264,9 @@ io.on('connection', (socket) => {
     if (!userId) return;
     const room = rooms.get(roomId);
     if (!room) return socket.emit('error', { message: 'Sala no existe' });
-
     socket.join(roomId);
     room.members.add(userId);
-    const msgs = room.messages.slice(-100);
-    socket.emit('history', { roomId, messages: msgs });
+    socket.emit('history', { roomId, messages: room.messages.slice(-100) });
   });
 
   socket.on('message:send', ({ roomId, text, replyTo }) => {
@@ -161,8 +289,15 @@ io.on('connection', (socket) => {
 
     const room = rooms.get(roomId) || globalRoom;
     room.messages.push(msg);
-    // Mantener solo los últimos 500 mensajes
     if (room.messages.length > 500) room.messages.shift();
+
+    // Agregar al buffer CSV
+    pendingLog.push({
+      timestamp: new Date(msg.timestamp).toISOString(),
+      room: room.name,
+      username: msg.username,
+      text: filtered,
+    });
 
     io.to(roomId).emit('message:new', msg);
   });
@@ -190,15 +325,9 @@ io.on('connection', (socket) => {
     if (!msg.reactions) msg.reactions = {};
     if (!msg.reactions[emoji]) msg.reactions[emoji] = new Set();
     const set = msg.reactions[emoji];
-    if (set.has(userId)) {
-      set.delete(userId);
-    } else {
-      set.add(userId);
-    }
+    if (set.has(userId)) set.delete(userId); else set.add(userId);
     const reactions = {};
-    for (const [em, s] of Object.entries(msg.reactions)) {
-      reactions[em] = s.size;
-    }
+    for (const [em, s] of Object.entries(msg.reactions)) reactions[em] = s.size;
     io.to(roomId).emit('message:reaction', { messageId, reactions });
   });
 
@@ -212,13 +341,16 @@ io.on('connection', (socket) => {
       user.socketId = null;
       io.emit('user:status', { userId, online: false });
     }
-    for (const room of rooms.values()) {
-      room.members.delete(userId);
-    }
+    for (const room of rooms.values()) room.members.delete(userId);
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🌸 Kiomi Chat corriendo en http://0.0.0.0:${PORT}`);
+  if (!GITHUB_TOKEN) {
+    console.warn('⚠️  GITHUB_TOKEN no configurado — las conversaciones NO se guardarán en GitHub');
+  } else {
+    console.log(`📄 Conversaciones se guardarán en GitHub → ${GITHUB_OWNER}/${GITHUB_REPO}/conversations/`);
+  }
 });
