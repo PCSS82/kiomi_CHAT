@@ -102,3 +102,41 @@ exports.onIncomingCall = onValueWritten('/calls/{pairKey}', async (event) => {
     await Promise.all(invalid.map((t) => db.ref(`fcmTokens/${after.to}/${t}`).remove()));
   }
 });
+
+// Avisa a toda la familia cuando alguien inicia una videollamada grupal,
+// para que suene aunque tengan la app cerrada (igual que onIncomingCall,
+// pero notifica a todos los miembros salvo a quien la inició).
+exports.onFamilyCallStart = onValueWritten('/calls/family', async (event) => {
+  const after = event.data.after.val();
+  if (!after || !after.active) return;
+  const before = event.data.before.val();
+  if (before && before.active) return; // ya se avisó de esta llamada
+
+  const db = getDatabase();
+  const recipients = FAMILY_MEMBERS.filter((n) => n !== after.startedBy);
+
+  await Promise.all(recipients.map(async (userKey) => {
+    const tokensSnap = await db.ref(`fcmTokens/${userKey}`).once('value');
+    const tokens = Object.keys(tokensSnap.val() || {});
+    if (!tokens.length) return;
+
+    const resp = await getMessaging().sendEachForMulticast({
+      tokens,
+      notification: { title: '📹 Videollamada familiar', body: `${after.startedBy} inició una llamada` },
+      data: { type: 'call', from: String(after.startedBy) },
+      webpush: {
+        notification: {
+          icon: 'public/icons/kiomi_icon.png',
+          requireInteraction: true,
+          vibrate: [500, 300, 500, 300, 500, 300, 500],
+        },
+      },
+    });
+
+    const invalid = [];
+    resp.responses.forEach((r, i) => { if (!r.success) invalid.push(tokens[i]); });
+    if (invalid.length) {
+      await Promise.all(invalid.map((t) => db.ref(`fcmTokens/${userKey}/${t}`).remove()));
+    }
+  }));
+});
