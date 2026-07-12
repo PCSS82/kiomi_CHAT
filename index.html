@@ -73,6 +73,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .sidebar-header .hname{font-weight:700;font-size:15px;flex:1}
 .sidebar-header .badge{background:#ec4899;color:#fff;border-radius:10px;
   font-size:11px;font-weight:700;padding:2px 7px}
+.settings-btn{background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;
+  border-radius:50%;cursor:pointer;font-size:15px;flex-shrink:0}
 .sidebar-search{padding:10px 12px;border-bottom:1px solid var(--border)}
 .sidebar-search input{width:100%;padding:8px 12px;border:1.5px solid var(--border);
   border-radius:10px;font-size:14px;background:var(--input-bg);color:var(--text);outline:none}
@@ -402,6 +404,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <img src="public/icons/kiomi_icon.png" alt="Kiomi"/>
         <span class="hname">Kiomi Chat</span>
         <span class="badge" id="k-unread-total" style="display:none">0</span>
+        <button class="settings-btn" onclick="resetAllChats()" title="Borrar todo el historial y reiniciar">🗑️</button>
       </div>
       <div class="presence-bar" id="k-presence-bar" style="display:none"></div>
       <div class="sidebar-search">
@@ -454,6 +457,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
        mucho menos propensos a silenciarla en segundo plano, sobre todo en
        Android — ver playRingtone()/stopRingtone(). -->
   <audio id="ringtone-audio" src="public/sounds/ringtone.wav" loop preload="auto"></audio>
+  <!-- Tono de "discado" (ringback) para quien llama, mientras espera que
+       contesten — ver playRingback()/stopRingback(). -->
+  <audio id="ringback-audio" src="public/sounds/ringback.wav" loop preload="auto"></audio>
   <div class="call-panel">
     <video id="call-remote-video" autoplay playsinline></video>
     <video id="call-local-video" autoplay playsinline muted></video>
@@ -767,6 +773,25 @@ function logout() {
   familyIncomingShown=false; familyCallDismissed=null;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   show('s-who');
+}
+
+// Borra TODO el historial de chats (texto, fotos, audios, registros de
+// llamada) de todas las conversaciones, y deja un único mensaje de
+// bienvenida en el chat familiar. Es irreversible, así que pide escribir
+// una palabra exacta en vez de un simple aceptar/cancelar — mucho más
+// difícil de tocar sin querer que un confirm().
+async function resetAllChats() {
+  if (!fbDb) return;
+  const typed = prompt('Esto borra TODO el historial de chats, fotos y audios para siempre, de todos los que usan la app. No se puede deshacer.\n\nEscribí BORRAR (en mayúsculas) para confirmar:');
+  if (typed !== 'BORRAR') return;
+  try {
+    await fbDb.ref('conversations').remove();
+    await fbDb.ref('lastSeen').remove();
+    await pushMessage(FAMILY_PATH, { ts: Date.now(), from: 'Kiomi', type: 'text', text: 'Bienvenidos al chat de Kiomi ❤️❤️❤️' }, 'Familia');
+    alert('Listo — se borró todo el historial y se mandó el mensaje de bienvenida.');
+  } catch(e) {
+    alert('Error al borrar: '+e.message);
+  }
 }
 
 // ══════════════════════════════════════════
@@ -1268,6 +1293,25 @@ function stopRingtone() {
   }
 }
 
+// Tono de "discado" (ringback) para quien está llamando, mientras espera
+// que el otro lado conteste — igual que el "brrr… brrr…" de un teléfono
+// real. Sonido propio (public/sounds/ringback.wav), distinto del timbre de
+// llamada entrante, para que se note la diferencia entre "estoy llamando"
+// y "me están llamando".
+function playRingback() {
+  stopRingback();
+  const audio = $('ringback-audio');
+  if (audio) {
+    audio.currentTime = 0;
+    audio.play().catch(e => console.warn('No se pudo reproducir el tono de discado:', e));
+  }
+}
+
+function stopRingback() {
+  const audio = $('ringback-audio');
+  if (audio) { audio.pause(); audio.currentTime = 0; }
+}
+
 // ══════════════════════════════════════════
 //  LLAMADAS DE VIDEO (WebRTC)
 // ══════════════════════════════════════════
@@ -1339,6 +1383,7 @@ async function startCall(otherParty) {
   pc.onconnectionstatechange = () => handleConnectionFailure(pc);
 
   showCallScreen('outgoing', otherParty);
+  playRingback();
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
@@ -1392,6 +1437,7 @@ function declineCall() {
 
 async function applyRemoteAnswer(answer) {
   if (!callState || !answer) return;
+  stopRingback();
   await callState.pc.setRemoteDescription(new RTCSessionDescription(answer));
   callState.remoteSet = true;
   showCallScreen('active', callState.otherParty);
@@ -1439,6 +1485,7 @@ function endCallLocal(status) {
 
 function cleanupCallLocal() {
   stopRingtone();
+  stopRingback();
   if (callState) {
     const pk = callState.pairKey;
     if (callState.candListenerPath) fbDb.ref(callState.candListenerPath).off();
