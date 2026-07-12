@@ -79,6 +79,15 @@ $fbInstalled = Get-Command firebase -ErrorAction SilentlyContinue
 if (-not $fbInstalled) {
     Write-Host "       Instalando firebase-tools (npm install -g firebase-tools)..." -ForegroundColor Yellow
     npm install -g firebase-tools
+    # Refresca el PATH de esta misma ventana para que "firebase" se reconozca
+    # sin tener que cerrar y volver a abrir PowerShell.
+    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+    $fbInstalled = Get-Command firebase -ErrorAction SilentlyContinue
+    if (-not $fbInstalled) {
+        Write-Host "  ERROR: firebase-tools se instaló pero esta ventana de PowerShell no lo detecta todavía." -ForegroundColor Red
+        Write-Host "  Cierra esta ventana, abre una NUEVA, entra a la carpeta $(Get-Location) y vuelve a correr este script." -ForegroundColor Red
+        exit 1
+    }
 } else {
     Write-Host "       Firebase CLI ya esta instalada ✓" -ForegroundColor Green
 }
