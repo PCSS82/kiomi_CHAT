@@ -138,10 +138,16 @@ familiar). Al tocarlo, pide confirmación y envía una alerta al chat activo:
 
 ## Si el audio no se reproduce en un iPhone
 
-Si al tocar ▶️ en una nota de voz no suena nada (y no aparece ningún error),
-lo más probable es que el **interruptor de silencio físico** del iPhone
-(el switch al lado del volumen) esté activado. iOS silencia el audio de
-las páginas web cuando ese interruptor está en modo silencio, y no hay
-forma de evitarlo desde el navegador — es una restricción de Apple.
-Revisa ese interruptor primero. Grabar audio sí funciona incluso con el
-interruptor en silencio, por eso puede parecer que "solo grabar funciona".
+Causa más común: Android graba las notas de voz en formato **WebM/Opus**,
+que Safari (iPhone) **no puede reproducir bajo ninguna circunstancia** —
+no es un bug, Apple nunca implementó ese formato. Por eso las notas que
+manda un Android no suenan en el iPhone, aunque entre Android sí se
+escuchen bien. Ya se corrigió: ahora se graba siempre en formato
+**MP4/AAC**, que reproducen tanto iPhone como Android. Esto aplica a las
+notas de voz grabadas *después* de este cambio — las que ya se enviaron
+antes en WebM van a seguir sin sonar en iPhone.
+
+Si después de esto sigue sin sonar (y no aparece ningún error), revisá el
+**interruptor de silencio físico** del iPhone (el switch al lado del
+volumen) — iOS silencia el audio de las páginas web cuando está activado,
+y no hay forma de evitarlo desde el navegador.

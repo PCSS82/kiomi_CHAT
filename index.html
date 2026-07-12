@@ -927,7 +927,10 @@ async function toggleFamilyRecording() {
     alert('No se pudo acceder al micrófono: '+e.message); return;
   }
   recordChunks = [];
-  const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/mp4']
+  // audio/mp4 primero: lo reproducen tanto iPhone como Android. webm/opus
+  // suena mejor y pesa menos, pero Safari/iOS no puede reproducirlo en
+  // absoluto — si un Android graba en webm, Kiomi nunca podría escucharlo.
+  const mimeType = ['audio/mp4','audio/mp4;codecs=mp4a.40.2','audio/webm;codecs=opus','audio/webm']
     .find(t => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
   mediaRecorder = mimeType ? new MediaRecorder(recordStream,{mimeType}) : new MediaRecorder(recordStream);
   mediaRecorder.ondataavailable = e => { if(e.data.size>0) recordChunks.push(e.data); };
