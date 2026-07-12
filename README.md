@@ -79,7 +79,14 @@ La app instalada (PWA en GitHub Pages) puede avisar con una notificación —
 como WhatsApp— y mostrar el número de mensajes sin leer en el ícono,
 incluso con el teléfono bloqueado o la app cerrada. Esto necesita un poco
 de configuración que solo tú puedes hacer, porque requiere acceso a tu
-propio proyecto de Firebase:
+propio proyecto de Firebase.
+
+**Atajo con PowerShell (Windows)**: si ya tienes tu plan Blaze activado y
+tu clave VAPID generada (pasos 1 y 2 de abajo, son de la consola de
+Firebase y no se pueden automatizar), corre `.\configurar_notificaciones.ps1`
+desde la raíz del repo — instala la Firebase CLI si falta, inicia sesión,
+pega tu clave VAPID y tu `firebaseConfig` en los archivos correctos, y
+despliega la función. Si prefieres hacerlo a mano, sigue estos pasos:
 
 1. **Activa el plan Blaze (pago por uso)** en tu proyecto: consola de
    Firebase → ⚙️ Configuración del proyecto → Uso y facturación → Modificar
@@ -105,9 +112,11 @@ propio proyecto de Firebase:
    ```
 6. Sube los cambios (`index.html`, `firebase-messaging-sw.js`) a GitHub
    Pages como siempre.
-7. En cada celular, abre la app y toca el ícono 🔔 (aparece en el chat de
-   Kiomi y en el chat de cada invitado) para activar las notificaciones en
-   ese dispositivo. Hay que hacerlo una vez por dispositivo.
+7. En cada celular, la primera vez que alguien entra al chat la app pide
+   el permiso de notificaciones automáticamente (no hace falta tocar
+   ningún botón). Solo hay que aceptar el aviso del navegador. Si alguien
+   lo rechaza sin querer, tendrá que activarlo desde los ajustes de
+   notificaciones del navegador para ese sitio.
 
 **Nota sobre iPhone**: Apple solo permite notificaciones push a páginas
 web si están instaladas en la pantalla de inicio (no funciona en una

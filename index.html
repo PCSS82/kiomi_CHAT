@@ -113,8 +113,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .chat-header .info{flex:1}
 .chat-header .hname{font-weight:700;font-size:15px}
 .chat-header .hsub{font-size:12px;opacity:.75}
-.chat-header .logout-btn,.sidebar-header .logout-btn{background:rgba(255,255,255,.15);border:none;color:#fff;
-  width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:15px;flex-shrink:0}
 
 .messages{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px;display:flex;flex-direction:column;gap:4px}
 .date-chip{text-align:center;margin:8px auto;font-size:11px;color:var(--muted);
@@ -205,6 +203,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .audio-error{font-size:11px;color:#dc2626;padding:4px 4px 0;max-width:220px}
 .panic-btn{background:#dc2626;border:none;color:#fff;width:34px;height:34px;border-radius:50%;
   cursor:pointer;font-size:16px;flex-shrink:0;animation:pulse 2s infinite}
+.panic-btn.panic-active{background:#374151;animation:pulse .8s infinite}
 .panic-bubble{background:#dc2626;color:#fff;font-weight:700;padding:2px;border-radius:8px;
   text-align:center;animation:pulse 1.2s infinite}
 </style>
@@ -315,7 +314,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <div class="hsub" id="g-status">Cargando…</div>
       </div>
       <button class="family-tab-btn" id="g-family-btn" style="display:none" onclick="toggleGuestMode()">👨‍👩‍👧‍👦 Familia</button>
-      <button class="logout-btn" id="g-bell-btn" style="display:none" onclick="initPush()" title="Activar notificaciones">🔔</button>
     </div>
     <div class="messages" id="g-messages"></div>
     <div class="sync-bar" id="g-sync"></div>
@@ -340,7 +338,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <img src="public/icons/kiomi_icon.png" alt="Kiomi"/>
         <span class="hname">Kiomi Chat</span>
         <span class="badge" id="k-unread-total" style="display:none">0</span>
-        <button class="logout-btn" id="k-bell-btn" style="display:none" onclick="initPush()" title="Activar notificaciones">🔔</button>
       </div>
       <div class="presence-bar" id="k-presence-bar" style="display:none"></div>
       <div class="sidebar-search">
@@ -653,7 +650,8 @@ function enterGuestChat() {
   $('g-family-btn').style.display = isFamilyMember(myName) ? '' : 'none';
   switchGuestMode('kiomi');
   attachPresence();
-  updateBellButtons();
+  attachGuestBadge();
+  silentlyInitPush();
 }
 
 // Cambia la vista guest entre el 1:1 con Kiomi y el grupo familiar
@@ -735,7 +733,7 @@ function enterKiomiChat() {
     if (activeConv) markSeen(activeConv);
   });
   attachPresence();
-  updateBellButtons();
+  silentlyInitPush();
 }
 
 function recomputeKiomiUnread() {
@@ -836,6 +834,7 @@ function openConv(name) {
   $('k-mic-btn').style.display    = isFam ? 'flex' : 'none';
   recomputeKiomiUnread(); // renderiza el chat activo con los datos ya cargados
   markSeen(name); // marca como leída y persiste en Firebase (sobrevive a reiniciar la app)
+  updatePanicButton();
   // Mobile: esconder sidebar
   if(window.innerWidth<=600) $('k-sidebar').classList.add('hidden');
 }
@@ -974,50 +973,109 @@ function markSeen(convId) {
   if (!fbDb || !myName) return;
   const now = Date.now();
   fbDb.ref('lastSeen/'+fbKey(myName)+'/'+convId).set(now);
+  // Actualización local optimista: no esperar el viaje de ida y vuelta a Firebase.
   if (isKiomi) {
-    // Actualización local optimista: no esperar el viaje de ida y vuelta a Firebase.
     kiomiLastSeenMap[convId] = now;
     if (convCache[convId]) { convCache[convId].lastSeen = now; convCache[convId].unread = 0; }
-  } else if (navigator.clearAppBadge) {
-    // Aproximación: al abrir cualquier chat, limpiamos el badge de este dispositivo.
-    // El próximo mensaje nuevo lo recalculará correctamente vía push.
-    navigator.clearAppBadge().catch(()=>{});
+  } else {
+    guestLastSeenMap[convId] = now;
+    recomputeGuestBadge();
+  }
+}
+
+// Badge del ícono para invitados: cuenta los no-leídos de SU 1:1 con Kiomi
+// más los del grupo familiar, en vivo, sin depender de las notificaciones push.
+let guestLastSeenMap = {};
+let guestBadgeMsgs = { own: [], family: [] };
+
+function attachGuestBadge() {
+  const ownId = fbKey(myName);
+  fbDb.ref('lastSeen/'+ownId).on('value', snap=>{
+    guestLastSeenMap = snap.val()||{};
+    recomputeGuestBadge();
+  });
+  fbDb.ref('conversations/'+ownId+'/messages').on('value', snap=>{
+    guestBadgeMsgs.own = Object.values(snap.val()||{});
+    recomputeGuestBadge();
+  });
+  fbDb.ref(FAMILY_PATH+'/messages').on('value', snap=>{
+    guestBadgeMsgs.family = Object.values(snap.val()||{});
+    recomputeGuestBadge();
+  });
+}
+
+function recomputeGuestBadge() {
+  const ownLastSeen = guestLastSeenMap[fbKey(myName)] || 0;
+  const famLastSeen = guestLastSeenMap['__family__'] || 0;
+  const unread = guestBadgeMsgs.own.filter(m=>m.from!==myName && m.ts>ownLastSeen).length
+               + guestBadgeMsgs.family.filter(m=>m.from!==myName && m.ts>famLastSeen).length;
+  if (navigator.setAppBadge) {
+    (unread>0 ? navigator.setAppBadge(unread) : navigator.clearAppBadge()).catch(()=>{});
   }
 }
 
 // Detecta mensajes de pánico NUEVOS (no los ya vistos ni los históricos
-// del primer snapshot al conectarse) y dispara la alarma local.
+// del primer snapshot al conectarse) y prende/apaga la alarma local.
 const seenPanicIds = new Set();
 function watchForPanic(messages, isFirstSnapshot) {
   messages.forEach(m => {
-    if (m.type !== 'panic' || !m.id || seenPanicIds.has(m.id)) return;
+    if (!m.id || seenPanicIds.has(m.id)) return;
+    if (m.type !== 'panic' && m.type !== 'panic_stop') return;
     seenPanicIds.add(m.id);
-    if (!isFirstSnapshot && m.from !== myName) triggerAlarm();
+    if (isFirstSnapshot || m.from === myName) return;
+    if (m.type === 'panic') triggerAlarm();
+    else stopAlarmLocal();
   });
 }
 
-// Botón de pánico de Kiomi: avisa a la conversación activa (1:1 o familia).
+// { convId: true } — de qué conversaciones Kiomi tiene una alarma sonando ahora mismo.
+let panicActiveFor = {};
+
+// Botón de pánico de Kiomi: primer toque envía la alerta (suena hasta que
+// se detenga), volver a tocarlo la apaga en los celulares que la recibieron.
 async function sendPanic() {
   if (!activeConv || !isKiomi) return;
-  const label = activeConv==='__family__' ? 'toda la familia' : activeConv;
-  if (!confirm('🚨 ¿Enviar alerta de pánico a '+label+'? Sonará una alarma en su celular.')) return;
+  const convId = activeConv;
+  const label  = convId==='__family__' ? 'toda la familia' : convId;
+  const path   = convId==='__family__' ? FAMILY_PATH : 'conversations/'+fbKey(convId);
+  const csvLabel = convId==='__family__' ? 'Familia' : convId;
+
+  if (panicActiveFor[convId]) {
+    try {
+      await pushMessage(path, { ts:Date.now(), from:'Kiomi', type:'panic_stop', text:'🔕 Alarma detenida' }, csvLabel);
+      panicActiveFor[convId] = false;
+      updatePanicButton();
+    } catch(e) { alert('No se pudo detener la alerta: '+e.message); }
+    return;
+  }
+
+  if (!confirm('🚨 ¿Enviar alerta de pánico a '+label+'? Sonará una alarma en su celular hasta que la detengas.')) return;
   try {
-    const msg  = { ts:Date.now(), from:'Kiomi', type:'panic', text:'🚨 Alerta de pánico' };
-    const path = activeConv==='__family__' ? FAMILY_PATH : 'conversations/'+fbKey(activeConv);
-    await pushMessage(path, msg, activeConv==='__family__'?'Familia':activeConv);
+    await pushMessage(path, { ts:Date.now(), from:'Kiomi', type:'panic', text:'🚨 Alerta de pánico' }, csvLabel);
+    panicActiveFor[convId] = true;
+    updatePanicButton();
   } catch(e) {
     alert('No se pudo enviar la alerta: '+e.message);
   }
 }
 
-// Vibra (si el navegador lo soporta — Android sí, iPhone/Safari no) y
-// reproduce una sirena sintetizada (sin necesitar un archivo de audio).
-function triggerAlarm() {
-  if (navigator.vibrate) navigator.vibrate([400,200,400,200,400,200,400]);
-  playAlarmSound();
+function updatePanicButton() {
+  const btn = document.querySelector('#s-kiomi-chat .panic-btn');
+  if (!btn) return;
+  const active = !!panicActiveFor[activeConv];
+  btn.textContent = active ? '🔕' : '🚨';
+  btn.title = active ? 'Detener alarma' : 'Alerta de pánico';
+  btn.classList.toggle('panic-active', active);
 }
 
-function playAlarmSound(durationMs=6000) {
+// Vibra (si el navegador lo soporta — Android sí, iPhone/Safari no) y
+// reproduce una sirena sintetizada en bucle (sin necesitar un archivo de
+// audio) hasta que llegue la señal de "panic_stop".
+let activeAlarm = null;
+
+function triggerAlarm() {
+  stopAlarmLocal();
+  if (navigator.vibrate) navigator.vibrate(Array(150).fill([400,200]).flat());
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     const ctx = new Ctx();
@@ -1033,25 +1091,36 @@ function playAlarmSound(durationMs=6000) {
       osc.frequency.setValueAtTime(high?880:660, ctx.currentTime);
     }, 350);
     osc.start();
-    osc.stop(ctx.currentTime + durationMs/1000);
-    osc.onended = () => { clearInterval(interval); ctx.close(); };
+    activeAlarm = { ctx, osc, interval };
   } catch(e) {
     console.warn('No se pudo reproducir la alarma:', e);
   }
 }
 
+function stopAlarmLocal() {
+  if (navigator.vibrate) navigator.vibrate(0);
+  if (activeAlarm) {
+    clearInterval(activeAlarm.interval);
+    try { activeAlarm.osc.stop(); } catch(e) {}
+    try { activeAlarm.ctx.close(); } catch(e) {}
+    activeAlarm = null;
+  }
+}
+
 // Pide permiso de notificaciones, registra el service worker y guarda el
 // token de este dispositivo en Firebase para que la Cloud Function le
-// pueda enviar avisos cuando llegue un mensaje nuevo.
-async function initPush() {
+// pueda enviar avisos cuando llegue un mensaje nuevo. En modo silencioso
+// no muestra alertas (se usa para pedir el permiso automáticamente, sin
+// que haga falta un botón).
+async function initPush(silent=false) {
   if (!('serviceWorker' in navigator) || !('Notification' in window) || !firebase.messaging) {
-    alert('Este navegador no soporta notificaciones push.');
+    if (!silent) alert('Este navegador no soporta notificaciones push.');
     return;
   }
   try {
     const reg  = await navigator.serviceWorker.register('firebase-messaging-sw.js');
     const perm = await Notification.requestPermission();
-    if (perm !== 'granted') { alert('No se activaron las notificaciones.'); return; }
+    if (perm !== 'granted') { if (!silent) alert('No se activaron las notificaciones.'); return; }
     const messaging = firebase.messaging();
     const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg });
     if (token && myName) await fbDb.ref('fcmTokens/'+fbKey(myName)+'/'+token).set(true);
@@ -1065,18 +1134,20 @@ async function initPush() {
         (n>0 ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(()=>{});
       }
       if (payload.data?.alarm==='1') triggerAlarm();
+      else if (payload.data?.alarm==='stop') stopAlarmLocal();
     });
-    updateBellButtons();
   } catch(e) {
     console.warn('No se pudieron activar las notificaciones:', e);
-    alert('No se pudieron activar las notificaciones: '+e.message);
+    if (!silent) alert('No se pudieron activar las notificaciones: '+e.message);
   }
 }
 
-function updateBellButtons() {
-  const granted = ('Notification' in window) && Notification.permission==='granted';
-  if ($('g-bell-btn')) $('g-bell-btn').style.display = granted ? 'none' : '';
-  if ($('k-bell-btn')) $('k-bell-btn').style.display = granted ? 'none' : '';
+// Se llama al entrar al chat: si el navegador nunca preguntó (o ya se
+// concedió antes) intenta activar el push sin mostrar ningún botón ni
+// alerta. Si el usuario ya lo rechazó una vez, no vuelve a insistir.
+function silentlyInitPush() {
+  if (!('Notification' in window) || Notification.permission === 'denied') return;
+  initPush(true);
 }
 
 // ══════════════════════════════════════════
