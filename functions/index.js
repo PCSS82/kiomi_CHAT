@@ -1,4 +1,4 @@
-const { onValueCreated } = require('firebase-functions/v2/database');
+const { onValueCreated, onValueWritten } = require('firebase-functions/v2/database');
 const { initializeApp } = require('firebase-admin/app');
 const { getDatabase } = require('firebase-admin/database');
 const { getMessaging } = require('firebase-admin/messaging');
@@ -39,16 +39,11 @@ exports.onNewMessage = onValueCreated('/conversations/{convId}/messages/{msgId}'
     ? FAMILY_MEMBERS.filter((n) => n !== msg.from)
     : [msg.from === 'Kiomi' ? convId : 'Kiomi'];
 
-  const isPanic     = msg.type === 'panic';
-  const isPanicStop = msg.type === 'panic_stop';
-  const bodyText = isPanic ? '🚨 Toca para abrir el chat'
-    : isPanicStop ? '🔕 La alarma se detuvo'
-    : msg.type === 'image' ? '📷 Imagen'
+  const bodyText = msg.type === 'image' ? '📷 Imagen'
     : msg.type === 'audio' ? '🎤 Nota de voz'
+    : msg.type === 'call' ? '📹 ' + (msg.text || 'Llamada de video')
     : (msg.text || '');
-  const title = isPanic ? `🚨 ALERTA DE ${msg.from.toUpperCase()}`
-    : isPanicStop ? 'Kiomi Chat'
-    : (convId === '__family__' ? `${msg.from} (Familia)` : msg.from);
+  const title = convId === '__family__' ? `${msg.from} (Familia)` : msg.from;
 
   await Promise.all(recipients.map(async (userKey) => {
     const [tokensSnap, unread] = await Promise.all([
@@ -61,17 +56,8 @@ exports.onNewMessage = onValueCreated('/conversations/{convId}/messages/{msgId}'
     const resp = await getMessaging().sendEachForMulticast({
       tokens,
       notification: { title, body: bodyText },
-      data: {
-        badge: String(unread),
-        convId: String(convId),
-        alarm: isPanic ? '1' : (isPanicStop ? 'stop' : '0'),
-      },
-      webpush: {
-        notification: {
-          icon: 'public/icons/kiomi_icon.png',
-          ...(isPanic ? { requireInteraction: true, vibrate: [400, 200, 400, 200, 400, 200, 400] } : {}),
-        },
-      },
+      data: { badge: String(unread), convId: String(convId) },
+      webpush: { notification: { icon: 'public/icons/kiomi_icon.png' } },
     });
 
     // Limpia tokens que ya no son válidos (app desinstalada, permiso revocado, etc.)
@@ -81,4 +67,38 @@ exports.onNewMessage = onValueCreated('/conversations/{convId}/messages/{msgId}'
       await Promise.all(invalid.map((t) => db.ref(`fcmTokens/${userKey}/${t}`).remove()));
     }
   }));
+});
+
+// Avisa con push cuando entra una llamada de video nueva, para que suene
+// aunque la app esté cerrada o en segundo plano (webRTC en sí solo puede
+// negociar mientras la app está abierta — esto solo hace sonar el timbre).
+exports.onIncomingCall = onValueWritten('/calls/{pairKey}', async (event) => {
+  const after = event.data.after.val();
+  if (!after || after.status !== 'ringing') return;
+  const before = event.data.before.val();
+  if (before && before.status === 'ringing') return; // ya se avisó de esta llamada
+
+  const db = getDatabase();
+  const tokensSnap = await db.ref(`fcmTokens/${after.to}`).once('value');
+  const tokens = Object.keys(tokensSnap.val() || {});
+  if (!tokens.length) return;
+
+  const resp = await getMessaging().sendEachForMulticast({
+    tokens,
+    notification: { title: `📹 Llamada de ${after.from}`, body: 'Toca para contestar' },
+    data: { type: 'call', from: String(after.from) },
+    webpush: {
+      notification: {
+        icon: 'public/icons/kiomi_icon.png',
+        requireInteraction: true,
+        vibrate: [500, 300, 500, 300, 500, 300, 500],
+      },
+    },
+  });
+
+  const invalid = [];
+  resp.responses.forEach((r, i) => { if (!r.success) invalid.push(tokens[i]); });
+  if (invalid.length) {
+    await Promise.all(invalid.map((t) => db.ref(`fcmTokens/${after.to}/${t}`).remove()));
+  }
 });

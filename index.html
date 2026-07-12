@@ -191,6 +191,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   border-radius:16px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;
   white-space:nowrap;flex-shrink:0}
 .msg-sender{font-size:11px;font-weight:700;color:var(--pink);padding:0 4px}
+.call-log{font-style:italic;opacity:.85}
 .bubble.media{padding:4px;background:var(--in-bg)}
 .msg-row.out .bubble.media{background:rgba(255,255,255,.2)}
 .msg-img{max-width:220px;max-height:280px;border-radius:12px;display:block;object-fit:cover;cursor:pointer}
@@ -201,12 +202,40 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .attach-btn.recording{background:#dc2626;border-color:#dc2626;color:#fff;animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .audio-error{font-size:11px;color:#dc2626;padding:4px 4px 0;max-width:220px}
-.panic-btn{background:rgba(255,255,255,.15);border:none;color:#fff;width:34px;height:34px;border-radius:50%;
-  cursor:pointer;font-size:16px;flex-shrink:0}
-.panic-btn.panic-active{animation:panic-blink .7s infinite}
-@keyframes panic-blink{0%,100%{background:#dc2626}50%{background:#7f1d1d}}
-.panic-bubble{background:#dc2626;color:#fff;font-weight:700;padding:2px;border-radius:8px;
-  text-align:center;animation:pulse 1.2s infinite}
+
+/* ── LLAMADA DE VIDEO ── */
+.call-btn-header{background:rgba(255,255,255,.15);border:none;color:#fff;width:34px;height:34px;
+  border-radius:50%;cursor:pointer;font-size:16px;flex-shrink:0}
+.call-panel{position:relative;width:100%;height:100dvh;background:#0b0614;overflow:hidden;
+  display:flex;flex-direction:column;align-items:center;justify-content:center}
+#call-remote-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#0b0614}
+#call-local-video{position:absolute;bottom:110px;right:16px;width:100px;height:140px;border-radius:14px;
+  object-fit:cover;background:#1e0a3c;border:2px solid rgba(255,255,255,.3);z-index:2}
+.call-info{position:relative;z-index:2;text-align:center;color:#fff;margin-top:60px}
+.call-info .call-avatar{width:88px;height:88px;border-radius:50%;background:var(--grad);
+  display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;
+  margin:0 auto 14px}
+.call-name{font-size:22px;font-weight:700}
+.call-status{font-size:14px;opacity:.75;margin-top:4px}
+.call-controls{position:absolute;bottom:28px;left:0;right:0;z-index:2;
+  display:flex;gap:22px;align-items:center;justify-content:center}
+.call-btn{width:60px;height:60px;border-radius:50%;border:none;font-size:26px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(255,255,255,.2)}
+.call-btn.call-btn-end{background:#dc2626;width:64px;height:64px;font-size:28px;
+  transform:rotate(135deg)}
+.call-btn.call-btn-accept{background:#16a34a}
+.call-btn.off{background:rgba(255,255,255,.5);color:#1e0a3c}
+@keyframes ring-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.call-info .call-avatar{animation:ring-pulse 1.4s infinite}
+
+/* ── PESTAÑAS GUEST: Kiomi / Familia con no-leídos ── */
+.guest-tabs{display:none;gap:8px;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+.guest-tab{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:9px;border-radius:12px;border:2px solid var(--border);background:var(--input-bg);
+  color:var(--text);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.guest-tab.active{border-color:var(--purple);background:var(--grad);color:#fff}
+.tab-dot{background:var(--pink);color:#fff;border-radius:10px;font-size:10px;font-weight:700;
+  padding:1px 6px;min-width:16px;text-align:center}
 </style>
 </head>
 <body>
@@ -314,7 +343,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <div class="hname"><span id="g-name-text">Kiomi 🌸</span> <span id="g-conn-badge"></span></div>
         <div class="hsub" id="g-status">Cargando…</div>
       </div>
-      <button class="family-tab-btn" id="g-family-btn" style="display:none" onclick="toggleGuestMode()">👨‍👩‍👧‍👦 Familia</button>
+      <button class="call-btn-header" id="g-call-btn" onclick="startCall('Kiomi')" title="Llamar a Kiomi">📹</button>
+    </div>
+    <div class="guest-tabs" id="g-tabs">
+      <button class="guest-tab active" id="g-tab-kiomi" onclick="switchGuestMode('kiomi')">
+        💬 Kiomi<span class="tab-dot" id="g-tab-kiomi-dot" style="display:none"></span>
+      </button>
+      <button class="guest-tab" id="g-tab-family" onclick="switchGuestMode('family')">
+        👨‍👩‍👧‍👦 Familia<span class="tab-dot" id="g-tab-family-dot" style="display:none"></span>
+      </button>
     </div>
     <div class="messages" id="g-messages"></div>
     <div class="sync-bar" id="g-sync"></div>
@@ -366,7 +403,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
             <div class="hname" id="k-chat-name">—</div>
             <div class="hsub" id="k-chat-sub"></div>
           </div>
-          <button class="panic-btn" onclick="sendPanic()" title="Alerta de pánico">🚨</button>
+          <button class="call-btn-header" id="k-call-btn" onclick="startCall(activeConv)" title="Llamar">📹</button>
         </div>
         <div class="messages" id="k-messages"></div>
         <div class="sync-bar" id="k-sync"></div>
@@ -380,6 +417,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
           <button class="send-btn" id="k-send-btn" onclick="kiomiSend()">➤</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LLAMADA DE VIDEO ══ -->
+<div class="screen" id="s-call">
+  <div class="call-panel">
+    <video id="call-remote-video" autoplay playsinline></video>
+    <video id="call-local-video" autoplay playsinline muted></video>
+    <div class="call-info">
+      <div class="call-avatar" id="call-avatar">?</div>
+      <div class="call-name" id="call-name">—</div>
+      <div class="call-status" id="call-status">Llamando…</div>
+    </div>
+    <div class="call-controls" id="call-controls-ringing-out" style="display:none">
+      <button class="call-btn call-btn-end" onclick="endCall()" title="Cancelar">📞</button>
+    </div>
+    <div class="call-controls" id="call-controls-ringing-in" style="display:none">
+      <button class="call-btn call-btn-accept" onclick="acceptCall()" title="Contestar">✅</button>
+      <button class="call-btn call-btn-end" onclick="declineCall()" title="Rechazar">📞</button>
+    </div>
+    <div class="call-controls" id="call-controls-active" style="display:none">
+      <button class="call-btn" id="call-mute-btn" onclick="toggleCallMute()" title="Silenciar micrófono">🎤</button>
+      <button class="call-btn" id="call-cam-btn" onclick="toggleCallCamera()" title="Apagar cámara">📷</button>
+      <button class="call-btn call-btn-end" onclick="endCall()" title="Colgar">📞</button>
     </div>
   </div>
 </div>
@@ -594,10 +656,12 @@ function enterKiomi() {
 function logout() {
   if(!confirm('¿Salir del chat?')) return;
   stopFamilyRecording();
+  if (callState) endCall();
   if(fbDb){
     if(myName) fbDb.ref('presence/'+fbKey(myName)).remove();
     fbDb.ref('conversations').off();
     fbDb.ref('presence').off();
+    fbDb.ref('calls').off();
     if(guestListenerPath) fbDb.ref(guestListenerPath).off();
     fbDb.ref('.info/connected').off();
   }
@@ -623,7 +687,7 @@ function renderMessages(box, messages, {showSender=false, emptyHtml=''}={}) {
     const isMe = m.from===myName;
     const isMedia = m.type==='image'||m.type==='audio';
     let inner;
-    if(m.type==='panic') inner=`<div class="panic-bubble">🚨 ¡Alerta de pánico de ${esc(m.from)}! 🚨</div>`;
+    if(m.type==='call') inner=`<div class="call-log">📹 ${esc(callLogText(m))}</div>`;
     else if(m.type==='image') inner=`<img class="msg-img" src="${m.data}" alt="imagen" onclick="window.open(this.src,'_blank')" onload="this.closest('.messages').scrollTop=this.closest('.messages').scrollHeight"/>`;
     else if(m.type==='audio') inner=`<audio class="msg-audio" controls src="${m.data}" onerror="this.insertAdjacentHTML('afterend','&lt;div class=&quot;audio-error&quot;&gt;⚠️ No se pudo reproducir (revisa el interruptor de silencio del celular)&lt;/div&gt;')"></audio>`;
     else inner=esc(m.text);
@@ -648,10 +712,11 @@ function scrollToBottom(box) {
 function enterGuestChat() {
   show('s-guest-chat');
   attachConnectionStatus('g-sync');
-  $('g-family-btn').style.display = isFamilyMember(myName) ? '' : 'none';
+  $('g-tabs').style.display = isFamilyMember(myName) ? 'flex' : 'none';
   switchGuestMode('kiomi');
   attachPresence();
   attachGuestBadge();
+  attachIncomingCallListener();
   silentlyInitPush();
 }
 
@@ -661,30 +726,25 @@ function switchGuestMode(mode) {
   if(guestListenerPath) fbDb.ref(guestListenerPath).off();
   const convId = mode==='family' ? '__family__' : fbKey(myName);
   guestListenerPath = 'conversations/'+convId+'/messages';
-  let firstSnapshot = true;
   fbDb.ref(guestListenerPath).on('value', snap=>{
     const val = snap.val()||{};
     const messages = Object.entries(val).map(([id,m])=>({...m,id})).sort((a,b)=>a.ts-b.ts);
     if(mode==='kiomi') convCache[myName] = { messages };
     renderGuestMessages(messages);
-    watchForPanic(messages, firstSnapshot);
-    firstSnapshot = false;
     markSeen(convId);
   });
   markSeen(convId);
+  $('g-tab-kiomi').classList.toggle('active', mode==='kiomi');
+  $('g-tab-family').classList.toggle('active', mode==='family');
   $('g-name-text').textContent = mode==='family' ? 'Familia' : 'Kiomi 🌸';
-  $('g-family-btn').textContent = mode==='family' ? '💬 Kiomi' : '👨‍👩‍👧‍👦 Familia';
   $('g-avatar-img').style.display = mode==='family' ? 'none' : '';
   $('g-avatar-group').style.display = mode==='family' ? 'flex' : 'none';
   $('g-conn-badge').style.display = mode==='family' ? 'none' : '';
+  $('g-call-btn').style.display = mode==='family' ? 'none' : '';
   $('g-status').textContent = mode==='family' ? 'Chat familiar' : 'Cargando…';
   $('g-attach-btn').style.display = mode==='family' ? 'flex' : 'none';
   $('g-mic-btn').style.display = mode==='family' ? 'flex' : 'none';
   $('g-input').placeholder = mode==='family' ? 'Escribe a la familia…' : 'Escribe a Kiomi…';
-}
-
-function toggleGuestMode() {
-  switchGuestMode(guestMode==='family' ? 'kiomi' : 'family');
 }
 
 function renderGuestMessages(messages) {
@@ -734,6 +794,7 @@ function enterKiomiChat() {
     if (activeConv) markSeen(activeConv);
   });
   attachPresence();
+  attachIncomingCallListener();
   silentlyInitPush();
 }
 
@@ -833,9 +894,9 @@ function openConv(name) {
   $('k-active').style.display    = 'flex';
   $('k-attach-btn').style.display = isFam ? 'flex' : 'none';
   $('k-mic-btn').style.display    = isFam ? 'flex' : 'none';
+  $('k-call-btn').style.display   = isFam ? 'none' : '';
   recomputeKiomiUnread(); // renderiza el chat activo con los datos ya cargados
   markSeen(name); // marca como leída y persiste en Firebase (sobrevive a reiniciar la app)
-  updatePanicButton();
   // Mobile: esconder sidebar
   if(window.innerWidth<=600) $('k-sidebar').classList.add('hidden');
 }
@@ -1011,103 +1072,303 @@ function attachGuestBadge() {
 function recomputeGuestBadge() {
   const ownLastSeen = guestLastSeenMap[fbKey(myName)] || 0;
   const famLastSeen = guestLastSeenMap['__family__'] || 0;
-  const unread = guestBadgeMsgs.own.filter(m=>m.from!==myName && m.ts>ownLastSeen).length
-               + guestBadgeMsgs.family.filter(m=>m.from!==myName && m.ts>famLastSeen).length;
+  const ownUnread = guestBadgeMsgs.own.filter(m=>m.from!==myName && m.ts>ownLastSeen).length;
+  const famUnread = guestBadgeMsgs.family.filter(m=>m.from!==myName && m.ts>famLastSeen).length;
   if (navigator.setAppBadge) {
-    (unread>0 ? navigator.setAppBadge(unread) : navigator.clearAppBadge()).catch(()=>{});
+    const total = ownUnread + famUnread;
+    (total>0 ? navigator.setAppBadge(total) : navigator.clearAppBadge()).catch(()=>{});
   }
+  const kDot = $('g-tab-kiomi-dot'), fDot = $('g-tab-family-dot');
+  if (kDot) { kDot.textContent = ownUnread>9?'9+':ownUnread; kDot.style.display = ownUnread>0 ? '' : 'none'; }
+  if (fDot) { fDot.textContent = famUnread>9?'9+':famUnread; fDot.style.display = famUnread>0 ? '' : 'none'; }
 }
 
-// Detecta mensajes de pánico NUEVOS (no los ya vistos ni los históricos
-// del primer snapshot al conectarse) y prende/apaga la alarma local.
-const seenPanicIds = new Set();
-function watchForPanic(messages, isFirstSnapshot) {
-  messages.forEach(m => {
-    if (!m.id || seenPanicIds.has(m.id)) return;
-    if (m.type !== 'panic' && m.type !== 'panic_stop') return;
-    seenPanicIds.add(m.id);
-    if (isFirstSnapshot || m.from === myName) return;
-    if (m.type === 'panic') triggerAlarm();
-    else stopAlarmLocal();
-  });
-}
+// Suena un timbre sintetizado (sin archivo de audio) y vibra (Android;
+// iPhone/Safari no soporta vibrar desde la web) mientras hay una llamada
+// entrante sonando, hasta que se conteste o se corte.
+let activeRingtone = null;
 
-// { convId: true } — de qué conversaciones Kiomi tiene una alarma sonando ahora mismo.
-let panicActiveFor = {};
-
-// Botón de pánico de Kiomi: primer toque envía la alerta (suena hasta que
-// se detenga), volver a tocarlo la apaga en los celulares que la recibieron.
-async function sendPanic() {
-  if (!activeConv || !isKiomi) return;
-  const convId = activeConv;
-  const label  = convId==='__family__' ? 'toda la familia' : convId;
-  const path   = convId==='__family__' ? FAMILY_PATH : 'conversations/'+fbKey(convId);
-  const csvLabel = convId==='__family__' ? 'Familia' : convId;
-
-  if (panicActiveFor[convId]) {
-    try {
-      await pushMessage(path, { ts:Date.now(), from:'Kiomi', type:'panic_stop', text:'🔕 Alarma detenida' }, csvLabel);
-      panicActiveFor[convId] = false;
-      updatePanicButton();
-    } catch(e) { alert('No se pudo detener la alerta: '+e.message); }
-    return;
-  }
-
-  if (!confirm('🚨 ¿Enviar alerta de pánico a '+label+'? Sonará una alarma en su celular hasta que la detengas.')) return;
-  try {
-    await pushMessage(path, { ts:Date.now(), from:'Kiomi', type:'panic', text:'🚨 Alerta de pánico' }, csvLabel);
-    panicActiveFor[convId] = true;
-    updatePanicButton();
-  } catch(e) {
-    alert('No se pudo enviar la alerta: '+e.message);
-  }
-}
-
-function updatePanicButton() {
-  const btn = document.querySelector('#s-kiomi-chat .panic-btn');
-  if (!btn) return;
-  const active = !!panicActiveFor[activeConv];
-  btn.title = active ? 'Detener alarma' : 'Alerta de pánico';
-  btn.classList.toggle('panic-active', active);
-}
-
-// Vibra (si el navegador lo soporta — Android sí, iPhone/Safari no) y
-// reproduce una sirena sintetizada en bucle (sin necesitar un archivo de
-// audio) hasta que llegue la señal de "panic_stop".
-let activeAlarm = null;
-
-function triggerAlarm() {
-  stopAlarmLocal();
-  if (navigator.vibrate) navigator.vibrate(Array(150).fill([400,200]).flat());
+function playRingtone() {
+  stopRingtone();
+  if (navigator.vibrate) navigator.vibrate(Array(60).fill([500,300]).flat());
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     const ctx = new Ctx();
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'square';
-    gain.gain.value = 0.25;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(600, ctx.currentTime);
+    gain.gain.value = 0.2;
     osc.connect(gain); gain.connect(ctx.destination);
-    let high = true;
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    let on = true;
     const interval = setInterval(() => {
-      high = !high;
-      osc.frequency.setValueAtTime(high?880:660, ctx.currentTime);
-    }, 350);
+      on = !on;
+      gain.gain.setValueAtTime(on?0.2:0, ctx.currentTime);
+    }, 500);
     osc.start();
-    activeAlarm = { ctx, osc, interval };
+    activeRingtone = { ctx, osc, interval };
   } catch(e) {
-    console.warn('No se pudo reproducir la alarma:', e);
+    console.warn('No se pudo reproducir el timbre:', e);
   }
 }
 
-function stopAlarmLocal() {
+function stopRingtone() {
   if (navigator.vibrate) navigator.vibrate(0);
-  if (activeAlarm) {
-    clearInterval(activeAlarm.interval);
-    try { activeAlarm.osc.stop(); } catch(e) {}
-    try { activeAlarm.ctx.close(); } catch(e) {}
-    activeAlarm = null;
+  if (activeRingtone) {
+    clearInterval(activeRingtone.interval);
+    try { activeRingtone.osc.stop(); } catch(e) {}
+    try { activeRingtone.ctx.close(); } catch(e) {}
+    activeRingtone = null;
   }
+}
+
+// ══════════════════════════════════════════
+//  LLAMADAS DE VIDEO (WebRTC)
+// ══════════════════════════════════════════
+// Solo STUN gratuito de Google — sin servidor TURN. Funciona bien en la
+// misma WiFi y en muchas redes móviles, pero algunas combinaciones de red
+// (datos móviles restrictivos de ambos lados, por ejemplo) pueden no
+// lograr conectar. Se puede agregar un TURN server más adelante si hace falta.
+const RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+function callPairKey(a, b) {
+  return [fbKey(a), fbKey(b)].sort().join('__');
+}
+
+let callState = null; // { pairKey, otherParty, role, pc, localStream, startTs, timerInterval, remoteSet, candListenerPath, pendingOffer }
+let incomingCallShown = null; // evita procesar la misma llamada entrante más de una vez
+
+// Kiomi escucha todas las llamadas (puede recibir de cualquier invitado);
+// cada invitado solo escucha su propio par con Kiomi.
+function attachIncomingCallListener() {
+  if (isKiomi) {
+    fbDb.ref('calls').on('value', snap => {
+      const all = snap.val() || {};
+      Object.entries(all).forEach(([pk, call]) => handleCallUpdate(pk, call));
+    });
+  } else {
+    const pk = callPairKey(myName, 'Kiomi');
+    fbDb.ref('calls/'+pk).on('value', snap => handleCallUpdate(pk, snap.val()));
+  }
+}
+
+function handleCallUpdate(pk, call) {
+  if (!call) return;
+  if (call.status === 'ringing' && call.to === myName && !callState && incomingCallShown !== pk+':'+call.ts) {
+    incomingCallShown = pk+':'+call.ts;
+    showIncomingCall(pk, call);
+    return;
+  }
+  if (!callState || callState.pairKey !== pk) return;
+  if (call.status === 'accepted' && callState.role === 'caller' && !callState.remoteSet) {
+    applyRemoteAnswer(call.answer);
+  } else if (call.status === 'rejected' || call.status === 'ended' || call.status === 'canceled') {
+    endCallLocal(call.status);
+  }
+}
+
+async function startCall(otherParty) {
+  if (!otherParty || callState) return;
+  let localStream;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+  } catch(e) {
+    alert('No se pudo acceder a la cámara/micrófono: '+e.message);
+    return;
+  }
+  const pk = callPairKey(myName, otherParty);
+  const existing = (await fbDb.ref('calls/'+pk).once('value')).val();
+  if (existing && (existing.status==='ringing' || existing.status==='accepted')) {
+    localStream.getTracks().forEach(t=>t.stop());
+    alert('Ya hay una llamada en curso con '+otherParty+'.');
+    return;
+  }
+
+  const pc = new RTCPeerConnection(RTC_CONFIG);
+  callState = { pairKey:pk, otherParty, role:'caller', pc, localStream, startTs:null, timerInterval:null, remoteSet:false };
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  pc.ontrack = e => attachRemoteStream(e.streams[0]);
+  pc.onicecandidate = e => { if (e.candidate) fbDb.ref('calls/'+pk+'/candidates/caller').push(e.candidate.toJSON()); };
+  pc.onconnectionstatechange = () => handleConnectionFailure(pc);
+
+  showCallScreen('outgoing', otherParty);
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await fbDb.ref('calls/'+pk).set({ from:myName, to:otherParty, status:'ringing', offer:{type:offer.type, sdp:offer.sdp}, ts:Date.now() });
+
+  listenRemoteCandidates(pk, 'callee');
+}
+
+function showIncomingCall(pk, call) {
+  const pc = new RTCPeerConnection(RTC_CONFIG);
+  callState = { pairKey:pk, otherParty:call.from, role:'callee', pc, localStream:null, startTs:null, timerInterval:null, pendingOffer:call.offer };
+  pc.ontrack = e => attachRemoteStream(e.streams[0]);
+  showCallScreen('incoming', call.from);
+  playRingtone();
+}
+
+async function acceptCall() {
+  if (!callState || callState.role!=='callee') return;
+  stopRingtone();
+  const { pairKey:pk, pc, pendingOffer, otherParty } = callState;
+  let localStream;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+  } catch(e) {
+    alert('No se pudo acceder a la cámara/micrófono: '+e.message);
+    declineCall();
+    return;
+  }
+  callState.localStream = localStream;
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  $('call-local-video').srcObject = localStream;
+  pc.onicecandidate = e => { if (e.candidate) fbDb.ref('calls/'+pk+'/candidates/callee').push(e.candidate.toJSON()); };
+  pc.onconnectionstatechange = () => handleConnectionFailure(pc);
+
+  await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  await fbDb.ref('calls/'+pk).update({ status:'accepted', answer:{type:answer.type, sdp:answer.sdp} });
+
+  listenRemoteCandidates(pk, 'caller');
+  showCallScreen('active', otherParty);
+  startCallTimer();
+}
+
+function declineCall() {
+  if (!callState) return;
+  fbDb.ref('calls/'+callState.pairKey).update({ status:'rejected' });
+  logCallMessage(callState.otherParty, 'declined');
+  cleanupCallLocal();
+}
+
+async function applyRemoteAnswer(answer) {
+  if (!callState || !answer) return;
+  await callState.pc.setRemoteDescription(new RTCSessionDescription(answer));
+  callState.remoteSet = true;
+  showCallScreen('active', callState.otherParty);
+  startCallTimer();
+}
+
+function listenRemoteCandidates(pk, remoteRole) {
+  const path = 'calls/'+pk+'/candidates/'+remoteRole;
+  fbDb.ref(path).on('child_added', snap => {
+    if (!callState || callState.pairKey!==pk || !callState.pc) return;
+    callState.pc.addIceCandidate(new RTCIceCandidate(snap.val())).catch(()=>{});
+  });
+  callState.candListenerPath = path;
+}
+
+function handleConnectionFailure(pc) {
+  if (!callState || callState.pc !== pc) return;
+  if (pc.connectionState === 'failed') {
+    alert('No se pudo conectar la llamada (puede ser por el tipo de red). Probá de nuevo, o probá que ambos estén en WiFi.');
+    endCall();
+  }
+}
+
+function endCall() {
+  if (!callState) return;
+  const { pairKey:pk, otherParty, role, startTs } = callState;
+  const status = startTs ? 'ended' : (role==='caller' ? 'canceled' : 'rejected');
+  fbDb.ref('calls/'+pk).update({ status }).catch(()=>{});
+  logCallMessage(otherParty, startTs ? 'answered' : (role==='caller' ? 'canceled' : 'missed'), startTs ? Math.round((Date.now()-startTs)/1000) : 0);
+  cleanupCallLocal();
+}
+
+// Se dispara cuando el OTRO lado termina, rechaza o cancela la llamada
+function endCallLocal(status) {
+  if (!callState) return;
+  if (status==='rejected' && callState.role==='caller') {
+    logCallMessage(callState.otherParty, 'declined');
+  } else if (!callState.startTs) {
+    logCallMessage(callState.otherParty, 'missed');
+  } else {
+    logCallMessage(callState.otherParty, 'answered', Math.round((Date.now()-callState.startTs)/1000));
+  }
+  cleanupCallLocal();
+}
+
+function cleanupCallLocal() {
+  stopRingtone();
+  if (callState) {
+    const pk = callState.pairKey;
+    if (callState.candListenerPath) fbDb.ref(callState.candListenerPath).off();
+    if (callState.localStream) callState.localStream.getTracks().forEach(t=>t.stop());
+    if (callState.pc) { try { callState.pc.close(); } catch(e) {} }
+    if (callState.timerInterval) clearInterval(callState.timerInterval);
+    setTimeout(() => { fbDb.ref('calls/'+pk).remove().catch(()=>{}); }, 3000);
+  }
+  callState = null;
+  hideCallScreen();
+}
+
+function startCallTimer() {
+  callState.startTs = Date.now();
+  $('call-status').textContent = '00:00';
+  callState.timerInterval = setInterval(() => {
+    const s = Math.floor((Date.now()-callState.startTs)/1000);
+    $('call-status').textContent = String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+  }, 1000);
+}
+
+function attachRemoteStream(stream) {
+  $('call-remote-video').srcObject = stream;
+}
+
+function showCallScreen(kind, otherName) {
+  $('call-name').textContent = otherName;
+  $('call-avatar').textContent = avatarLetter(otherName);
+  $('call-controls-ringing-out').style.display = kind==='outgoing' ? 'flex' : 'none';
+  $('call-controls-ringing-in').style.display  = kind==='incoming' ? 'flex' : 'none';
+  $('call-controls-active').style.display      = kind==='active'   ? 'flex' : 'none';
+  $('call-status').textContent = kind==='outgoing' ? 'Llamando…' : kind==='incoming' ? 'Te está llamando…' : '00:00';
+  if (callState && callState.localStream) $('call-local-video').srcObject = callState.localStream;
+  show('s-call');
+}
+
+function hideCallScreen() {
+  $('call-remote-video').srcObject = null;
+  $('call-local-video').srcObject = null;
+  if (isKiomi) show('s-kiomi-chat'); else show('s-guest-chat');
+}
+
+function toggleCallMute() {
+  if (!callState || !callState.localStream) return;
+  const track = callState.localStream.getAudioTracks()[0];
+  if (!track) return;
+  track.enabled = !track.enabled;
+  $('call-mute-btn').classList.toggle('off', !track.enabled);
+}
+
+function toggleCallCamera() {
+  if (!callState || !callState.localStream) return;
+  const track = callState.localStream.getVideoTracks()[0];
+  if (!track) return;
+  track.enabled = !track.enabled;
+  $('call-cam-btn').classList.toggle('off', !track.enabled);
+}
+
+function callLogText(m) {
+  if (m.callStatus==='missed') return 'Llamada perdida';
+  if (m.callStatus==='declined') return 'Llamada rechazada';
+  if (m.callStatus==='canceled') return 'Llamada cancelada';
+  if (m.callStatus==='answered') {
+    const s = m.duration||0;
+    return 'Llamada de video · '+String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+  }
+  return 'Llamada de video';
+}
+
+function logCallMessage(otherParty, callStatus, duration) {
+  // Kiomi es siempre una de las dos partes de cada llamada: que solo su lado
+  // registre el resumen evita que quede duplicado (uno por cada participante).
+  if (!isKiomi) return;
+  const guestName = otherParty;
+  const path = 'conversations/'+fbKey(guestName);
+  const msg = { ts:Date.now(), from:myName, type:'call', text:'Llamada de video', callStatus, duration: duration||0 };
+  pushMessage(path, msg, guestName).catch(()=>{});
 }
 
 // Pide permiso de notificaciones, registra el service worker y guarda el
