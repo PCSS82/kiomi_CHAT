@@ -22,8 +22,9 @@ messaging.onBackgroundMessage((payload) => {
   const badge  = payload.data?.badge;
   const isAlarm = payload.data?.alarm === '1';
 
-  if (badge != null && self.setAppBadge) {
-    self.setAppBadge(Number(badge)).catch(() => {});
+  // La Badging API vive en self.navigator, no directamente en self.
+  if (badge != null && self.navigator && self.navigator.setAppBadge) {
+    self.navigator.setAppBadge(Number(badge)).catch(() => {});
   }
 
   // La alarma sonora solo puede reproducirse con la app abierta (los service
