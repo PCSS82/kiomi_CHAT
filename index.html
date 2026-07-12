@@ -546,17 +546,27 @@ function show(id) {
 // navegadores Android no achican el viewport cuando aparece el teclado
 // (por eso la barra quedaba tapada) — visualViewport sí nos avisa siempre
 // que el teclado abre/cierra, así que la usamos para fijar la altura real.
-// NOTA: antes esto además compensaba con un translateY en <body> cuando
-// visualViewport.offsetTop cambiaba, pero ese offsetTop puede saltar de
-// forma transitoria (por ejemplo, justo al mandar un mensaje y vaciar el
-// textarea) — eso hacía que toda la pantalla, header incluido, se corriera
-// para abajo y volviera a subir. Se sacó: solo con el alto (vv.height) ya
-// alcanza para que la barra quede pegada arriba del teclado, sin mover el
-// header nunca.
+// Además, iOS corre la página hacia arriba al enfocar un campo de texto
+// (visualViewport.offsetTop > 0) sin que el layout fijo (position:fixed)
+// se entere — eso es justo lo que hacía que la barra terminara flotando
+// más arriba de lo debido, tapada o directamente fuera de la pantalla en
+// vez de quedar pegada arriba del teclado. Por eso se compensa con un
+// translateY. Antes esto se probó sin "debounce" y se sacó porque
+// offsetTop podía saltar de forma transitoria (por ejemplo justo al
+// mandar un mensaje y vaciar el textarea) y la pantalla entera, header
+// incluido, se corría para abajo y volvía a subir enseguida. Ahora se
+// espera un poquito antes de aplicar el translateY: si el salto es solo
+// transitorio, el valor real (estable) llega antes de que se llegue a
+// pintar el intermedio, y no hay "salto" visible.
 if (window.visualViewport) {
   const vv = window.visualViewport;
+  let offsetTimer = null;
   const applyAppHeight = () => {
     document.documentElement.style.setProperty('--app-height', vv.height + 'px');
+    clearTimeout(offsetTimer);
+    offsetTimer = setTimeout(() => {
+      document.body.style.transform = vv.offsetTop ? `translateY(${vv.offsetTop}px)` : '';
+    }, 100);
   };
   vv.addEventListener('resize', applyAppHeight);
   vv.addEventListener('scroll', applyAppHeight);
