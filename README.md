@@ -122,15 +122,14 @@ despliega la función. Si prefieres hacerlo a mano, sigue estos pasos:
 web si están instaladas en la pantalla de inicio (no funciona en una
 pestaña normal de Safari) y requiere iOS 16.4 o superior.
 
-## Llamadas de video (ícono 📹, solo chats 1:1)
+## Llamadas de video (ícono 📹)
 
-Cualquier invitado y Kiomi pueden llamarse por video entre ellos con el
-ícono 📹 del header (no está disponible en el chat familiar — las llamadas
-son siempre entre dos personas). Al llamar:
+Cualquier invitado y Kiomi pueden llamarse por video con el ícono 📹 del
+header. Al llamar:
 
 - El otro lado ve una pantalla de llamada entrante con opción de
-  contestar o rechazar, y suena un timbre + vibra (Android; en iPhone no
-  es posible vibrar desde una web) mientras la app esté abierta.
+  contestar (📹) o rechazar (📞), y suena un timbre + vibra (Android; en
+  iPhone no es posible vibrar desde una web) mientras la app esté abierta.
 - Con la app cerrada, llega como notificación push para avisar que hay
   una llamada — al tocarla se abre la app.
 - Requiere la misma configuración de notificaciones push descrita arriba
@@ -144,6 +143,60 @@ funciona bien cuando ambos están en la misma WiFi o en muchas redes
 móviles, pero en algunas combinaciones de red (datos móviles restrictivos
 de los dos lados, por ejemplo) la llamada puede no lograr conectar. Si eso
 pasa seguido, se puede agregar un servidor TURN más adelante.
+
+### Videollamada grupal (chat familiar)
+
+En el chat "Familia" el mismo ícono 📹 inicia o se une a una **videollamada
+grupal**: todos los que la toquen entran a la misma llamada (no hace falta
+"contestar" uno por uno, es como un link de reunión). Cada participante se
+conecta directo con todos los demás (sin servidor de video intermedio), así
+que funciona mejor con 2-4 personas conectadas a la vez — con más gente el
+consumo de datos y de batería de cada teléfono sube bastante, porque cada
+uno envía su cámara a todos los demás por separado.
+
+- Mientras hay una llamada familiar activa, el ícono 📹 del header se pone
+  **verde y parpadea** para todos (tanto en la pestaña Familia de cada
+  invitado como en el chat Familia de Kiomi) — así se nota que hay gente
+  conectada y pueden sumarse.
+- Con la app cerrada, apenas empieza la llamada llega una notificación push
+  a todos los miembros de la familia (menos a quien la inició) para avisar.
+- Cada quien sale con el botón de colgar (📞); cuando se va el último
+  participante la llamada se cierra sola.
+- Aplican las mismas limitaciones de red (solo STUN) que en las llamadas
+  1:1 — con más de 2-3 personas en redes restrictivas, algún par puntual
+  puede no lograr conectar entre sí aunque el resto de la llamada funcione.
+
+### Por qué no suena exactamente como una llamada de WhatsApp/FaceTime con la app cerrada
+
+Con el teléfono bloqueado o la app totalmente cerrada, lo máximo que puede
+hacer una app web (PWA) es lo que ya hace acá: mandar una notificación push
+que vibra y se queda fija en la pantalla hasta que alguien la toca — al
+tocarla, recién ahí se abre la app. **No hay forma de que una PWA abra sola
+una pantalla de "llamada entrante" a pantalla completa sin que la persona
+toque algo primero**, ni de sonar con un tono de llamada real mientras el
+teléfono está bloqueado. Eso (CallKit en iPhone, la pantalla de llamada de
+Android) es una función exclusiva de apps nativas instaladas desde la
+App Store / Play Store — Apple y Google no le dan ese permiso a una app
+que se instaló desde el navegador, sin excepción. Si en algún momento hace
+falta ese nivel de "suena como llamada de verdad", la única forma real es
+convertir la app en una app nativa (con Capacitor/React Native, por
+ejemplo) y publicarla en las tiendas — es un proyecto bastante más grande.
+
+## Indicadores de lectura en el chat familiar
+
+Cada mensaje del chat familiar muestra 4 puntitos (Koji, Ami, Mamá, Papá):
+verde si esa persona ya vio el mensaje, amarillo si todavía no. Se
+actualizan en vivo — no hace falta recargar la app.
+
+## Si el número del ícono deja de actualizarse
+
+Si funcionó una vez y después dejó de avisar con la app cerrada, es porque
+el navegador seguía usando una versión vieja y cacheada de
+`firebase-messaging-sw.js` (sin la corrección de badge que se hizo). Ya se
+agregó `skipWaiting()`/`clients.claim()` para que la versión nueva tome el
+control enseguida, pero por las dudas: **cerrá completamente la app (o el
+navegador) y volvé a abrirla** después de actualizar el código, así el
+service worker nuevo se activa del todo.
 
 ## Si el audio no se reproduce en un iPhone
 

@@ -15,6 +15,15 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// Sin esto, el navegador puede seguir usando una versión vieja y cacheada
+// de este archivo indefinidamente (hasta cerrar TODAS las pestañas/la app
+// por completo), incluso después de subir una corrección — por eso un
+// arreglo puede "funcionar una vez y después dejar de funcionar": en
+// realidad nunca se activó la versión nueva. skipWaiting + clients.claim
+// fuerzan a que la versión nueva tome el control de inmediato.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(clients.claim()));
+
 // Se dispara cuando llega una notificación y la app/pestaña NO está en primer plano
 messaging.onBackgroundMessage((payload) => {
   const title  = payload.notification?.title || 'Kiomi Chat';

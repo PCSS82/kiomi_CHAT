@@ -192,6 +192,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   white-space:nowrap;flex-shrink:0}
 .msg-sender{font-size:11px;font-weight:700;color:var(--pink);padding:0 4px}
 .call-log{font-style:italic;opacity:.85}
+.receipts{display:flex;gap:3px;padding:1px 4px 0}
+.msg-row.out .receipts{justify-content:flex-end}
+.msg-row.in .receipts{justify-content:flex-start}
+.receipt-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.receipt-dot.read{background:#22c55e}
+.receipt-dot.unread{background:#eab308}
 .bubble.media{padding:4px;background:var(--in-bg)}
 .msg-row.out .bubble.media{background:rgba(255,255,255,.2)}
 .msg-img{max-width:220px;max-height:280px;border-radius:12px;display:block;object-fit:cover;cursor:pointer}
@@ -227,6 +233,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .call-btn.off{background:rgba(255,255,255,.5);color:#1e0a3c}
 @keyframes ring-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 .call-info .call-avatar{animation:ring-pulse 1.4s infinite}
+
+/* Grilla de video para la llamada grupal familiar */
+.call-grid{position:absolute;inset:0;z-index:1;display:grid;gap:4px;padding:4px;
+  grid-template-columns:repeat(2,1fr);align-content:center}
+.call-tile{position:relative;background:#1e0a3c;border-radius:10px;overflow:hidden;aspect-ratio:3/4}
+.call-tile-video{width:100%;height:100%;object-fit:cover}
+.call-tile-label{position:absolute;bottom:4px;left:6px;color:#fff;font-size:12px;font-weight:600;
+  text-shadow:0 1px 3px rgba(0,0,0,.8)}
+
+/* Botón de llamada del header: parpadea cuando hay una llamada familiar activa */
+.call-btn-header.call-live{background:#16a34a;animation:panic-blink-green 1s infinite}
+@keyframes panic-blink-green{0%,100%{background:#16a34a}50%{background:#15803d}}
 
 /* ── PESTAÑAS GUEST: Kiomi / Familia con no-leídos ── */
 .guest-tabs{display:none;gap:8px;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--border)}
@@ -343,7 +361,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <div class="hname"><span id="g-name-text">Kiomi 🌸</span> <span id="g-conn-badge"></span></div>
         <div class="hsub" id="g-status">Cargando…</div>
       </div>
-      <button class="call-btn-header" id="g-call-btn" onclick="startCall('Kiomi')" title="Llamar a Kiomi">📹</button>
+      <button class="call-btn-header" id="g-call-btn" title="Videollamada a Kiomi">📹</button>
     </div>
     <div class="guest-tabs" id="g-tabs">
       <button class="guest-tab active" id="g-tab-kiomi" onclick="switchGuestMode('kiomi')">
@@ -403,7 +421,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
             <div class="hname" id="k-chat-name">—</div>
             <div class="hsub" id="k-chat-sub"></div>
           </div>
-          <button class="call-btn-header" id="k-call-btn" onclick="startCall(activeConv)" title="Llamar">📹</button>
+          <button class="call-btn-header" id="k-call-btn" title="Videollamada">📹</button>
         </div>
         <div class="messages" id="k-messages"></div>
         <div class="sync-bar" id="k-sync"></div>
@@ -426,6 +444,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   <div class="call-panel">
     <video id="call-remote-video" autoplay playsinline></video>
     <video id="call-local-video" autoplay playsinline muted></video>
+    <div class="call-grid" id="call-grid" style="display:none"></div>
     <div class="call-info">
       <div class="call-avatar" id="call-avatar">?</div>
       <div class="call-name" id="call-name">—</div>
@@ -435,13 +454,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       <button class="call-btn call-btn-end" onclick="endCall()" title="Cancelar">📞</button>
     </div>
     <div class="call-controls" id="call-controls-ringing-in" style="display:none">
-      <button class="call-btn call-btn-accept" onclick="acceptCall()" title="Contestar">✅</button>
+      <button class="call-btn call-btn-accept" onclick="acceptCall()" title="Contestar videollamada">📹</button>
       <button class="call-btn call-btn-end" onclick="declineCall()" title="Rechazar">📞</button>
     </div>
     <div class="call-controls" id="call-controls-active" style="display:none">
       <button class="call-btn" id="call-mute-btn" onclick="toggleCallMute()" title="Silenciar micrófono">🎤</button>
       <button class="call-btn" id="call-cam-btn" onclick="toggleCallCamera()" title="Apagar cámara">📷</button>
-      <button class="call-btn call-btn-end" onclick="endCall()" title="Colgar">📞</button>
+      <button class="call-btn call-btn-end" id="call-active-end-btn" title="Colgar">📞</button>
     </div>
   </div>
 </div>
@@ -657,11 +676,13 @@ function logout() {
   if(!confirm('¿Salir del chat?')) return;
   stopFamilyRecording();
   if (callState) endCall();
+  if (familyCallState) leaveFamilyCall();
   if(fbDb){
     if(myName) fbDb.ref('presence/'+fbKey(myName)).remove();
     fbDb.ref('conversations').off();
     fbDb.ref('presence').off();
     fbDb.ref('calls').off();
+    fbDb.ref('calls/family/active').off();
     if(guestListenerPath) fbDb.ref(guestListenerPath).off();
     fbDb.ref('.info/connected').off();
   }
@@ -678,7 +699,7 @@ function logout() {
 // ══════════════════════════════════════════
 //  RENDER DE MENSAJES (compartido guest/Kiomi/familia)
 // ══════════════════════════════════════════
-function renderMessages(box, messages, {showSender=false, emptyHtml=''}={}) {
+function renderMessages(box, messages, {showSender=false, emptyHtml='', showReadReceipts=false}={}) {
   if(!messages.length){ box.innerHTML=emptyHtml; return; }
   let html='', lastDate=null;
   messages.forEach(m=>{
@@ -695,10 +716,25 @@ function renderMessages(box, messages, {showSender=false, emptyHtml=''}={}) {
       ${showSender&&!isMe?`<div class="msg-sender">${esc(m.from)}</div>`:''}
       <div class="bubble${isMedia?' media':''}">${inner}</div>
       <div class="msg-time">${fmtTime(m.ts)}</div>
+      ${showReadReceipts?readReceiptsHtml(m):''}
     </div>`;
   });
   box.innerHTML=html;
   scrollToBottom(box);
+}
+
+// 4 bolitas (Koji, Ami, Mamá, Papá) por mensaje del chat familiar: verde si
+// esa persona ya vio el mensaje (su lastSeen de __family__ es posterior),
+// amarillo si todavía no.
+const READ_RECEIPT_MEMBERS = ['Koji','Ami','Mamá','Papá'];
+let familyLastSeenMap = {}; // { Koji: ts, Ami: ts, 'Mamá': ts, 'Papá': ts }
+
+function readReceiptsHtml(m) {
+  const dots = READ_RECEIPT_MEMBERS.map(name => {
+    const read = name===m.from || (familyLastSeenMap[name]||0) >= m.ts;
+    return `<span class="receipt-dot ${read?'read':'unread'}" title="${esc(name)}: ${read?'leído':'no leído'}"></span>`;
+  }).join('');
+  return `<div class="receipts">${dots}</div>`;
 }
 
 function scrollToBottom(box) {
@@ -717,6 +753,8 @@ function enterGuestChat() {
   attachPresence();
   attachGuestBadge();
   attachIncomingCallListener();
+  attachFamilyCallIndicator();
+  if (isFamilyMember(myName)) attachFamilyReceipts();
   silentlyInitPush();
 }
 
@@ -740,18 +778,20 @@ function switchGuestMode(mode) {
   $('g-avatar-img').style.display = mode==='family' ? 'none' : '';
   $('g-avatar-group').style.display = mode==='family' ? 'flex' : 'none';
   $('g-conn-badge').style.display = mode==='family' ? 'none' : '';
-  $('g-call-btn').style.display = mode==='family' ? 'none' : '';
+  $('g-call-btn').title = mode==='family' ? 'Videollamada familiar' : 'Videollamada a Kiomi';
+  $('g-call-btn').onclick = mode==='family' ? joinFamilyCall : () => startCall('Kiomi');
   $('g-status').textContent = mode==='family' ? 'Chat familiar' : 'Cargando…';
   $('g-attach-btn').style.display = mode==='family' ? 'flex' : 'none';
   $('g-mic-btn').style.display = mode==='family' ? 'flex' : 'none';
   $('g-input').placeholder = mode==='family' ? 'Escribe a la familia…' : 'Escribe a Kiomi…';
+  updateCallLiveIndicator();
 }
 
 function renderGuestMessages(messages) {
   const empty = guestMode==='family'
     ? '<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);margin-top:40px"><div style="font-size:48px">👨‍👩‍👧‍👦</div><p style="font-size:14px">Sé el primero en escribir en el chat familiar</p></div>'
     : '<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);margin-top:40px"><div style="font-size:48px">🌸</div><p style="font-size:14px">Escríbele a Kiomi para empezar</p></div>';
-  renderMessages($('g-messages'), messages, { showSender: guestMode==='family', emptyHtml: empty });
+  renderMessages($('g-messages'), messages, { showSender: guestMode==='family', showReadReceipts: guestMode==='family', emptyHtml: empty });
 }
 
 async function guestSend() {
@@ -795,6 +835,8 @@ function enterKiomiChat() {
   });
   attachPresence();
   attachIncomingCallListener();
+  attachFamilyCallIndicator();
+  attachFamilyReceipts();
   silentlyInitPush();
 }
 
@@ -894,7 +936,9 @@ function openConv(name) {
   $('k-active').style.display    = 'flex';
   $('k-attach-btn').style.display = isFam ? 'flex' : 'none';
   $('k-mic-btn').style.display    = isFam ? 'flex' : 'none';
-  $('k-call-btn').style.display   = isFam ? 'none' : '';
+  $('k-call-btn').title    = isFam ? 'Videollamada familiar' : 'Videollamada';
+  $('k-call-btn').onclick  = isFam ? joinFamilyCall : () => startCall(activeConv);
+  updateCallLiveIndicator();
   recomputeKiomiUnread(); // renderiza el chat activo con los datos ya cargados
   markSeen(name); // marca como leída y persiste en Firebase (sobrevive a reiniciar la app)
   // Mobile: esconder sidebar
@@ -911,6 +955,7 @@ function closeMobileChat() {
 function renderKiomiMessages(messages) {
   renderMessages($('k-messages'), messages, {
     showSender: activeConv==='__family__',
+    showReadReceipts: activeConv==='__family__',
     emptyHtml: '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px">Sin mensajes aún</div>'
   });
 }
@@ -1083,6 +1128,25 @@ function recomputeGuestBadge() {
   if (fDot) { fDot.textContent = famUnread>9?'9+':famUnread; fDot.style.display = famUnread>0 ? '' : 'none'; }
 }
 
+// Escucha cuándo vio cada miembro de la familia el chat grupal por última
+// vez, y vuelve a pintar los mensajes con los puntitos de lectura al día.
+function attachFamilyReceipts() {
+  fbDb.ref('lastSeen').on('value', async snap => {
+    const all = snap.val() || {};
+    READ_RECEIPT_MEMBERS.forEach(name => {
+      familyLastSeenMap[name] = (all[fbKey(name)] || {})['__family__'] || 0;
+    });
+    if (!isKiomi && guestMode==='family') {
+      const msgsSnap = await fbDb.ref(FAMILY_PATH+'/messages').once('value');
+      const val = msgsSnap.val()||{};
+      const messages = Object.entries(val).map(([id,m])=>({...m,id})).sort((a,b)=>a.ts-b.ts);
+      renderGuestMessages(messages);
+    } else if (isKiomi && activeConv==='__family__') {
+      renderKiomiMessages(convCache['__family__']?.messages||[]);
+    }
+  });
+}
+
 // Suena un timbre sintetizado (sin archivo de audio) y vibra (Android;
 // iPhone/Safari no soporta vibrar desde la web) mientras hay una llamada
 // entrante sonando, hasta que se conteste o se corte.
@@ -1136,6 +1200,7 @@ function callPairKey(a, b) {
 }
 
 let callState = null; // { pairKey, otherParty, role, pc, localStream, startTs, timerInterval, remoteSet, candListenerPath, pendingOffer }
+let familyCallState = null; // { localStream, peers: { [otherKey]: {pc, name, candListenerPath, offerListenerPath} } } — llamada grupal familiar
 let incomingCallShown = null; // evita procesar la misma llamada entrante más de una vez
 
 // Kiomi escucha todas las llamadas (puede recibir de cualquier invitado);
@@ -1154,7 +1219,7 @@ function attachIncomingCallListener() {
 
 function handleCallUpdate(pk, call) {
   if (!call) return;
-  if (call.status === 'ringing' && call.to === myName && !callState && incomingCallShown !== pk+':'+call.ts) {
+  if (call.status === 'ringing' && call.to === myName && !callState && !familyCallState && incomingCallShown !== pk+':'+call.ts) {
     incomingCallShown = pk+':'+call.ts;
     showIncomingCall(pk, call);
     return;
@@ -1168,7 +1233,7 @@ function handleCallUpdate(pk, call) {
 }
 
 async function startCall(otherParty) {
-  if (!otherParty || callState) return;
+  if (!otherParty || callState || familyCallState) { if (familyCallState) alert('Termina la llamada familiar antes de llamar a alguien más.'); return; }
   let localStream;
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
@@ -1318,6 +1383,9 @@ function attachRemoteStream(stream) {
 }
 
 function showCallScreen(kind, otherName) {
+  $('call-grid').style.display = 'none';
+  $('call-remote-video').style.display = '';
+  $('call-local-video').style.display = '';
   $('call-name').textContent = otherName;
   $('call-avatar').textContent = avatarLetter(otherName);
   $('call-controls-ringing-out').style.display = kind==='outgoing' ? 'flex' : 'none';
@@ -1325,29 +1393,211 @@ function showCallScreen(kind, otherName) {
   $('call-controls-active').style.display      = kind==='active'   ? 'flex' : 'none';
   $('call-status').textContent = kind==='outgoing' ? 'Llamando…' : kind==='incoming' ? 'Te está llamando…' : '00:00';
   if (callState && callState.localStream) $('call-local-video').srcObject = callState.localStream;
+  $('call-active-end-btn').onclick = endCall;
   show('s-call');
 }
 
 function hideCallScreen() {
   $('call-remote-video').srcObject = null;
   $('call-local-video').srcObject = null;
+  $('call-grid').innerHTML = '';
   if (isKiomi) show('s-kiomi-chat'); else show('s-guest-chat');
 }
 
+function getActiveLocalStream() {
+  return (callState && callState.localStream) || (familyCallState && familyCallState.localStream) || null;
+}
+
 function toggleCallMute() {
-  if (!callState || !callState.localStream) return;
-  const track = callState.localStream.getAudioTracks()[0];
+  const stream = getActiveLocalStream();
+  if (!stream) return;
+  const track = stream.getAudioTracks()[0];
   if (!track) return;
   track.enabled = !track.enabled;
   $('call-mute-btn').classList.toggle('off', !track.enabled);
 }
 
 function toggleCallCamera() {
-  if (!callState || !callState.localStream) return;
-  const track = callState.localStream.getVideoTracks()[0];
+  const stream = getActiveLocalStream();
+  if (!stream) return;
+  const track = stream.getVideoTracks()[0];
   if (!track) return;
   track.enabled = !track.enabled;
   $('call-cam-btn').classList.toggle('off', !track.enabled);
+}
+
+// ══════════════════════════════════════════
+//  LLAMADA GRUPAL FAMILIAR (malla WebRTC: cada participante
+//  se conecta directo con todos los demás — sin servidor de medios)
+// ══════════════════════════════════════════
+function familyPairKey(a, b) {
+  return [a, b].sort().join('__');
+}
+
+let familyCallActive = false; // último valor conocido de calls/family/active
+
+function attachFamilyCallIndicator() {
+  fbDb.ref('calls/family/active').on('value', snap => {
+    familyCallActive = !!snap.val();
+    updateCallLiveIndicator();
+  });
+}
+
+function updateCallLiveIndicator() {
+  if ($('g-call-btn')) $('g-call-btn').classList.toggle('call-live', familyCallActive && guestMode==='family');
+  if ($('k-call-btn')) $('k-call-btn').classList.toggle('call-live', familyCallActive && activeConv==='__family__');
+}
+
+async function joinFamilyCall() {
+  if (callState || familyCallState) return;
+  let localStream;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+  } catch(e) {
+    alert('No se pudo acceder a la cámara/micrófono: '+e.message);
+    return;
+  }
+  const myKey = fbKey(myName);
+  familyCallState = { localStream, peers:{} };
+  showGroupCallScreen();
+  addLocalTile(localStream);
+
+  const activeSnap = await fbDb.ref('calls/family/active').once('value');
+  if (!activeSnap.val()) {
+    await fbDb.ref('calls/family').update({ active:true, startedBy:myName, startedAt:Date.now() });
+  }
+  const partRef = fbDb.ref('calls/family/participants/'+myKey);
+  await partRef.set({ name:myName, joinedAt:Date.now() });
+  partRef.onDisconnect().remove();
+
+  fbDb.ref('calls/family/participants').on('child_added', snap => {
+    if (!familyCallState) return;
+    const otherKey = snap.key;
+    if (otherKey === myKey) return;
+    const data = snap.val() || {};
+    connectToFamilyPeer(otherKey, data.name || otherKey);
+  });
+  fbDb.ref('calls/family/participants').on('child_removed', snap => {
+    if (!familyCallState || snap.key === myKey) return;
+    removeFamilyPeer(snap.key);
+  });
+}
+
+function connectToFamilyPeer(otherKey, otherName) {
+  if (!familyCallState || familyCallState.peers[otherKey]) return;
+  const myKey = fbKey(myName);
+  const pk = familyPairKey(myKey, otherKey);
+  const amOfferer = myKey < otherKey;
+  const pc = new RTCPeerConnection(RTC_CONFIG);
+  const peer = { pc, name:otherName, candListenerPath:null, offerListenerPath:null };
+  familyCallState.peers[otherKey] = peer;
+
+  familyCallState.localStream.getTracks().forEach(t => pc.addTrack(t, familyCallState.localStream));
+  pc.ontrack = e => addRemoteTile(otherKey, otherName, e.streams[0]);
+  pc.onicecandidate = e => { if (e.candidate) fbDb.ref('calls/family_pairs/'+pk+'/candidates/'+myKey).push(e.candidate.toJSON()); };
+
+  const remoteCandPath = 'calls/family_pairs/'+pk+'/candidates/'+otherKey;
+  fbDb.ref(remoteCandPath).on('child_added', snap => {
+    pc.addIceCandidate(new RTCIceCandidate(snap.val())).catch(()=>{});
+  });
+  peer.candListenerPath = remoteCandPath;
+
+  // La clave alfabéticamente menor hace la oferta — así ambos lados llegan
+  // al mismo rol sin coordinación extra (evita colisiones tipo "glare").
+  if (amOfferer) {
+    const answerPath = 'calls/family_pairs/'+pk+'/answer';
+    pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
+      const d = pc.localDescription;
+      return fbDb.ref('calls/family_pairs/'+pk+'/offer').set({ type:d.type, sdp:d.sdp });
+    });
+    fbDb.ref(answerPath).on('value', snap => {
+      const answer = snap.val();
+      if (answer && pc.signalingState === 'have-local-offer') {
+        pc.setRemoteDescription(new RTCSessionDescription(answer)).catch(()=>{});
+      }
+    });
+    peer.offerListenerPath = answerPath;
+  } else {
+    const offerPath = 'calls/family_pairs/'+pk+'/offer';
+    fbDb.ref(offerPath).on('value', async snap => {
+      const offer = snap.val();
+      if (offer && !pc.currentRemoteDescription) {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await fbDb.ref('calls/family_pairs/'+pk+'/answer').set({ type:answer.type, sdp:answer.sdp });
+      }
+    });
+    peer.offerListenerPath = offerPath;
+  }
+}
+
+function removeFamilyPeer(otherKey) {
+  if (!familyCallState) return;
+  const peer = familyCallState.peers[otherKey];
+  if (!peer) return;
+  const pk = familyPairKey(fbKey(myName), otherKey);
+  if (peer.candListenerPath) fbDb.ref(peer.candListenerPath).off();
+  if (peer.offerListenerPath) fbDb.ref(peer.offerListenerPath).off();
+  try { peer.pc.close(); } catch(e) {}
+  delete familyCallState.peers[otherKey];
+  const tile = $('call-tile-'+otherKey);
+  if (tile) tile.remove();
+  fbDb.ref('calls/family_pairs/'+pk).remove().catch(()=>{});
+}
+
+async function leaveFamilyCall() {
+  if (!familyCallState) return;
+  const myKey = fbKey(myName);
+  fbDb.ref('calls/family/participants').off();
+  Object.keys(familyCallState.peers).forEach(k => removeFamilyPeer(k));
+  const partRef = fbDb.ref('calls/family/participants/'+myKey);
+  partRef.onDisconnect().cancel();
+  familyCallState.localStream.getTracks().forEach(t=>t.stop());
+  familyCallState = null;
+  hideCallScreen();
+  await partRef.remove();
+
+  const remaining = (await fbDb.ref('calls/family/participants').once('value')).val();
+  if (!remaining) fbDb.ref('calls/family').remove().catch(()=>{});
+}
+
+function showGroupCallScreen() {
+  $('call-grid').style.display = 'grid';
+  $('call-grid').innerHTML = '';
+  $('call-remote-video').style.display = 'none';
+  $('call-local-video').style.display = 'none';
+  $('call-name').textContent = 'Familia';
+  $('call-avatar').textContent = '👨‍👩‍👧‍👦';
+  $('call-controls-ringing-out').style.display = 'none';
+  $('call-controls-ringing-in').style.display  = 'none';
+  $('call-controls-active').style.display      = 'flex';
+  $('call-mute-btn').classList.remove('off');
+  $('call-cam-btn').classList.remove('off');
+  $('call-status').textContent = 'Llamada familiar';
+  $('call-active-end-btn').onclick = leaveFamilyCall;
+  show('s-call');
+}
+
+function addLocalTile(stream) {
+  const div = document.createElement('div');
+  div.className = 'call-tile';
+  div.id = 'call-tile-local';
+  div.innerHTML = '<video class="call-tile-video" autoplay playsinline muted></video><div class="call-tile-label">Tú</div>';
+  $('call-grid').appendChild(div);
+  div.querySelector('video').srcObject = stream;
+}
+
+function addRemoteTile(otherKey, otherName, stream) {
+  let div = $('call-tile-'+otherKey);
+  if (!div) {
+    div = document.createElement('div');
+    div.className = 'call-tile';
+    div.id = 'call-tile-'+otherKey;
+    div.innerHTML = `<video class="call-tile-video" autoplay playsinline></video><div class="call-tile-label">${esc(otherName)}</div>`;
+    $('call-grid').appendChild(div);
+  }
+  div.querySelector('video').srcObject = stream;
 }
 
 function callLogText(m) {
@@ -1383,6 +1633,7 @@ async function initPush(silent=false) {
   }
   try {
     const reg  = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+    reg.update().catch(()=>{}); // fuerza a revisar si hay una versión más nueva del service worker
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') { if (!silent) alert('No se activaron las notificaciones.'); return; }
     const messaging = firebase.messaging();
