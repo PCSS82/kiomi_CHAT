@@ -29,11 +29,13 @@
   --in-bg:#2d1254;--in-text:#fdf4ff;
   --input-bg:#2d1254;--header:#4c1d95;
 }}
+html{height:100%;overflow:hidden}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  background:var(--bg);color:var(--text);height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+  background:var(--bg);color:var(--text);height:100dvh;display:flex;flex-direction:column;overflow:hidden;
+  position:fixed;inset:0;width:100%}
 
 /* ── SCREENS ── */
-.screen{display:none;height:100dvh}
+.screen{display:none;height:100dvh;overflow:hidden}
 .screen.active{display:flex}
 
 /* ── SETUP ── */
@@ -56,7 +58,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .err{color:#dc2626;font-size:13px;min-height:16px;text-align:center}
 
 /* ── CHAT LAYOUT ── */
-.chat-layout{display:flex;width:100%;height:100dvh;overflow:hidden}
+.chat-layout{display:flex;width:100%;height:100%;min-height:0;overflow:hidden}
 
 /* ── SIDEBAR (Kiomi host) ── */
 .sidebar{width:300px;flex-shrink:0;display:flex;flex-direction:column;
@@ -70,7 +72,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .sidebar-search{padding:10px 12px;border-bottom:1px solid var(--border)}
 .sidebar-search input{width:100%;padding:8px 12px;border:1.5px solid var(--border);
   border-radius:10px;font-size:14px;background:var(--input-bg);color:var(--text);outline:none}
-.conv-list{flex:1;overflow-y:auto}
+.conv-list{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .conv-item{display:flex;align-items:center;gap:12px;padding:12px 16px;
   border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
 .conv-item:hover,.conv-item.active{background:var(--bg)}
@@ -101,7 +103,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .divider-or::before,.divider-or::after{content:'';flex:1;height:1px;background:var(--border)}
 
 /* ── CHAT PANEL ── */
-.chat-panel{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.chat-panel{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
 .chat-header{background:var(--header);color:#fff;padding:12px 16px;
   display:flex;align-items:center;gap:12px;flex-shrink:0}
 .chat-header .back-btn{display:none;background:none;border:none;color:#fff;
@@ -114,7 +116,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .chat-header .logout-btn,.sidebar-header .logout-btn{background:rgba(255,255,255,.15);border:none;color:#fff;
   width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:15px;flex-shrink:0}
 
-.messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:4px}
+.messages{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px;display:flex;flex-direction:column;gap:4px}
 .date-chip{text-align:center;margin:8px auto;font-size:11px;color:var(--muted);
   background:var(--border);border-radius:20px;padding:3px 12px;align-self:center}
 .msg-row{display:flex;flex-direction:column;max-width:75%;gap:2px}
@@ -200,6 +202,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   display:flex;align-items:center;justify-content:center}
 .attach-btn.recording{background:#dc2626;border-color:#dc2626;color:#fff;animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.audio-error{font-size:11px;color:#dc2626;padding:4px 4px 0;max-width:220px}
+.panic-btn{background:#dc2626;border:none;color:#fff;width:34px;height:34px;border-radius:50%;
+  cursor:pointer;font-size:16px;flex-shrink:0;animation:pulse 2s infinite}
+.panic-bubble{background:#dc2626;color:#fff;font-weight:700;padding:2px;border-radius:8px;
+  text-align:center;animation:pulse 1.2s infinite}
 </style>
 </head>
 <body>
@@ -299,7 +306,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 
 <!-- ══ CHAT GUEST (habla con Kiomi) ══ -->
 <div class="screen" id="s-guest-chat">
-  <div class="chat-panel" style="display:flex;flex-direction:column;width:100%;height:100dvh">
+  <div class="chat-panel" style="display:flex;flex-direction:column;width:100%;height:100%;min-height:0">
     <div class="chat-header">
       <img id="g-avatar-img" src="public/icons/kiomi_icon.png" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.4)"/>
       <div class="av" id="g-avatar-group" style="display:none">👨‍👩‍👧‍👦</div>
@@ -309,7 +316,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       </div>
       <button class="family-tab-btn" id="g-family-btn" style="display:none" onclick="toggleGuestMode()">👨‍👩‍👧‍👦 Familia</button>
       <button class="logout-btn" id="g-bell-btn" style="display:none" onclick="initPush()" title="Activar notificaciones">🔔</button>
-      <button class="logout-btn" onclick="logout()">⚙️</button>
     </div>
     <div class="messages" id="g-messages"></div>
     <div class="sync-bar" id="g-sync"></div>
@@ -346,9 +352,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
           <p>Nadie ha escrito aún</p>
         </div>
       </div>
-      <div style="padding:10px 12px;border-top:1px solid var(--border)">
-        <button class="btn-sec" onclick="logout()" style="width:100%">Salir ⚙️</button>
-      </div>
     </div>
 
     <!-- Panel de chat activo -->
@@ -357,7 +360,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <img src="public/icons/kiomi_icon.png" alt="Kiomi"/>
         <p>Selecciona una conversación</p>
       </div>
-      <div id="k-active" style="display:none;flex-direction:column;height:100dvh;flex:1">
+      <div id="k-active" style="display:none;flex-direction:column;height:100%;min-height:0;flex:1">
         <div class="chat-header">
           <button class="back-btn" onclick="closeMobileChat()">‹</button>
           <div class="av" id="k-chat-avatar">?</div>
@@ -365,6 +368,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
             <div class="hname" id="k-chat-name">—</div>
             <div class="hsub" id="k-chat-sub"></div>
           </div>
+          <button class="panic-btn" onclick="sendPanic()" title="Alerta de pánico">🚨</button>
         </div>
         <div class="messages" id="k-messages"></div>
         <div class="sync-bar" id="k-sync"></div>
@@ -621,8 +625,9 @@ function renderMessages(box, messages, {showSender=false, emptyHtml=''}={}) {
     const isMe = m.from===myName;
     const isMedia = m.type==='image'||m.type==='audio';
     let inner;
-    if(m.type==='image') inner=`<img class="msg-img" src="${m.data}" alt="imagen" onclick="window.open(this.src,'_blank')"/>`;
-    else if(m.type==='audio') inner=`<audio class="msg-audio" controls src="${m.data}"></audio>`;
+    if(m.type==='panic') inner=`<div class="panic-bubble">🚨 ¡Alerta de pánico de ${esc(m.from)}! 🚨</div>`;
+    else if(m.type==='image') inner=`<img class="msg-img" src="${m.data}" alt="imagen" onclick="window.open(this.src,'_blank')" onload="this.closest('.messages').scrollTop=this.closest('.messages').scrollHeight"/>`;
+    else if(m.type==='audio') inner=`<audio class="msg-audio" controls src="${m.data}" onerror="this.insertAdjacentHTML('afterend','&lt;div class=&quot;audio-error&quot;&gt;⚠️ No se pudo reproducir (revisa el interruptor de silencio del celular)&lt;/div&gt;')"></audio>`;
     else inner=esc(m.text);
     html+=`<div class="msg-row ${isMe?'out':'in'}">
       ${showSender&&!isMe?`<div class="msg-sender">${esc(m.from)}</div>`:''}
@@ -631,7 +636,12 @@ function renderMessages(box, messages, {showSender=false, emptyHtml=''}={}) {
     </div>`;
   });
   box.innerHTML=html;
-  box.scrollTop=box.scrollHeight;
+  scrollToBottom(box);
+}
+
+function scrollToBottom(box) {
+  box.scrollTop = box.scrollHeight;
+  requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
 }
 
 // ══════════════════════════════════════════
@@ -652,11 +662,14 @@ function switchGuestMode(mode) {
   if(guestListenerPath) fbDb.ref(guestListenerPath).off();
   const convId = mode==='family' ? '__family__' : fbKey(myName);
   guestListenerPath = 'conversations/'+convId+'/messages';
+  let firstSnapshot = true;
   fbDb.ref(guestListenerPath).on('value', snap=>{
     const val = snap.val()||{};
-    const messages = Object.values(val).sort((a,b)=>a.ts-b.ts);
+    const messages = Object.entries(val).map(([id,m])=>({...m,id})).sort((a,b)=>a.ts-b.ts);
     if(mode==='kiomi') convCache[myName] = { messages };
     renderGuestMessages(messages);
+    watchForPanic(messages, firstSnapshot);
+    firstSnapshot = false;
     markSeen(convId);
   });
   markSeen(convId);
@@ -703,39 +716,54 @@ async function guestSend() {
 // ══════════════════════════════════════════
 let allConvNames = [];
 
+let kiomiConvsData = {};
+let kiomiLastSeenMap = {}; // cargado desde Firebase (lastSeen/Kiomi) — sobrevive a reinicios de la app
+
 function enterKiomiChat() {
   show('s-kiomi-chat');
   attachConnectionStatus('k-sync');
+  fbDb.ref('lastSeen/Kiomi').on('value', snap=>{
+    kiomiLastSeenMap = snap.val()||{};
+    recomputeKiomiUnread();
+  });
   fbDb.ref('conversations').on('value', snap=>{
-    const data = snap.val()||{};
-    const names = Object.keys(data);
-    allConvNames = names;
-
-    let unreadTotal = 0;
-    names.forEach(name=>{
-      const prev = convCache[name];
-      const msgsObj = (data[name]||{}).messages || {};
-      const messages = Object.values(msgsObj).sort((a,b)=>a.ts-b.ts);
-      const lastSeen = prev?.lastSeen || 0;
-      const unread   = messages.filter(m=>m.from!=='Kiomi'&&m.ts>lastSeen).length;
-      convCache[name] = { messages, lastSeen, unread };
-      unreadTotal += unread;
-      if(activeConv===name) { renderKiomiMessages(messages); markSeen(name); }
-    });
-
-    renderConvList();
-    if(unreadTotal>0){
-      $('k-unread-total').textContent=unreadTotal;
-      $('k-unread-total').style.display='';
-    } else {
-      $('k-unread-total').style.display='none';
-    }
-    if (navigator.setAppBadge) {
-      (unreadTotal>0 ? navigator.setAppBadge(unreadTotal) : navigator.clearAppBadge()).catch(()=>{});
-    }
+    kiomiConvsData = snap.val()||{};
+    recomputeKiomiUnread();
+    // Llegó un mensaje nuevo mientras este chat está abierto: márcalo como leído.
+    // (Se hace aquí, no dentro de recomputeKiomiUnread, para no crear un bucle
+    // con el listener de lastSeen/Kiomi de arriba.)
+    if (activeConv) markSeen(activeConv);
   });
   attachPresence();
   updateBellButtons();
+}
+
+function recomputeKiomiUnread() {
+  const data  = kiomiConvsData;
+  const names = Object.keys(data);
+  allConvNames = names;
+
+  let unreadTotal = 0;
+  names.forEach(name=>{
+    const msgsObj = (data[name]||{}).messages || {};
+    const messages = Object.entries(msgsObj).map(([id,m])=>({...m,id})).sort((a,b)=>a.ts-b.ts);
+    const lastSeen = kiomiLastSeenMap[name] || 0;
+    const unread   = messages.filter(m=>m.from!=='Kiomi'&&m.ts>lastSeen).length;
+    convCache[name] = { messages, lastSeen, unread };
+    unreadTotal += unread;
+    if(activeConv===name) renderKiomiMessages(messages);
+  });
+
+  renderConvList();
+  if(unreadTotal>0){
+    $('k-unread-total').textContent=unreadTotal;
+    $('k-unread-total').style.display='';
+  } else {
+    $('k-unread-total').style.display='none';
+  }
+  if (navigator.setAppBadge) {
+    (unreadTotal>0 ? navigator.setAppBadge(unreadTotal) : navigator.clearAppBadge()).catch(()=>{});
+  }
 }
 
 function renderConvList() {
@@ -798,11 +826,6 @@ function filterConvs() { renderConvList(); }
 function openConv(name) {
   activeConv = name;
   const c    = convCache[name]||{};
-  if(c.unread) {
-    c.lastSeen = Date.now();
-    c.unread   = 0;
-    localStorage.setItem('kc_seen_'+name, c.lastSeen);
-  }
   const isFam = name==='__family__';
   $('k-chat-avatar').textContent = isFam ? '👨‍👩‍👧‍👦' : avatarLetter(name);
   $('k-chat-name').textContent   = isFam ? 'Familia' : name;
@@ -811,9 +834,8 @@ function openConv(name) {
   $('k-active').style.display    = 'flex';
   $('k-attach-btn').style.display = isFam ? 'flex' : 'none';
   $('k-mic-btn').style.display    = isFam ? 'flex' : 'none';
-  renderKiomiMessages(c.messages||[]);
-  renderConvList();
-  markSeen(name);
+  recomputeKiomiUnread(); // renderiza el chat activo con los datos ya cargados
+  markSeen(name); // marca como leída y persiste en Firebase (sobrevive a reiniciar la app)
   // Mobile: esconder sidebar
   if(window.innerWidth<=600) $('k-sidebar').classList.add('hidden');
 }
@@ -944,14 +966,78 @@ async function onFamilyRecordingStop() {
 //  NOTIFICACIONES PUSH + BADGE DEL ÍCONO
 // ══════════════════════════════════════════
 
-// Guarda cuándo fue la última vez que "myName" vio una conversación,
-// para que la Cloud Function pueda calcular cuántos mensajes no ha leído.
+// Guarda cuándo fue la última vez que "myName" vio una conversación en
+// Firebase (no solo localStorage), para que el estado leído/no-leído
+// sobreviva a cerrar y reabrir la app, y para que la Cloud Function
+// pueda calcular cuántos mensajes no ha leído cada quien.
 function markSeen(convId) {
   if (!fbDb || !myName) return;
-  fbDb.ref('lastSeen/'+fbKey(myName)+'/'+convId).set(Date.now());
-  // Aproximación: al abrir cualquier chat, limpiamos el badge de este dispositivo.
-  // El próximo mensaje nuevo lo recalculará correctamente vía push.
-  if (!isKiomi && navigator.clearAppBadge) navigator.clearAppBadge().catch(()=>{});
+  const now = Date.now();
+  fbDb.ref('lastSeen/'+fbKey(myName)+'/'+convId).set(now);
+  if (isKiomi) {
+    // Actualización local optimista: no esperar el viaje de ida y vuelta a Firebase.
+    kiomiLastSeenMap[convId] = now;
+    if (convCache[convId]) { convCache[convId].lastSeen = now; convCache[convId].unread = 0; }
+  } else if (navigator.clearAppBadge) {
+    // Aproximación: al abrir cualquier chat, limpiamos el badge de este dispositivo.
+    // El próximo mensaje nuevo lo recalculará correctamente vía push.
+    navigator.clearAppBadge().catch(()=>{});
+  }
+}
+
+// Detecta mensajes de pánico NUEVOS (no los ya vistos ni los históricos
+// del primer snapshot al conectarse) y dispara la alarma local.
+const seenPanicIds = new Set();
+function watchForPanic(messages, isFirstSnapshot) {
+  messages.forEach(m => {
+    if (m.type !== 'panic' || !m.id || seenPanicIds.has(m.id)) return;
+    seenPanicIds.add(m.id);
+    if (!isFirstSnapshot && m.from !== myName) triggerAlarm();
+  });
+}
+
+// Botón de pánico de Kiomi: avisa a la conversación activa (1:1 o familia).
+async function sendPanic() {
+  if (!activeConv || !isKiomi) return;
+  const label = activeConv==='__family__' ? 'toda la familia' : activeConv;
+  if (!confirm('🚨 ¿Enviar alerta de pánico a '+label+'? Sonará una alarma en su celular.')) return;
+  try {
+    const msg  = { ts:Date.now(), from:'Kiomi', type:'panic', text:'🚨 Alerta de pánico' };
+    const path = activeConv==='__family__' ? FAMILY_PATH : 'conversations/'+fbKey(activeConv);
+    await pushMessage(path, msg, activeConv==='__family__'?'Familia':activeConv);
+  } catch(e) {
+    alert('No se pudo enviar la alerta: '+e.message);
+  }
+}
+
+// Vibra (si el navegador lo soporta — Android sí, iPhone/Safari no) y
+// reproduce una sirena sintetizada (sin necesitar un archivo de audio).
+function triggerAlarm() {
+  if (navigator.vibrate) navigator.vibrate([400,200,400,200,400,200,400]);
+  playAlarmSound();
+}
+
+function playAlarmSound(durationMs=6000) {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    gain.gain.value = 0.25;
+    osc.connect(gain); gain.connect(ctx.destination);
+    let high = true;
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    const interval = setInterval(() => {
+      high = !high;
+      osc.frequency.setValueAtTime(high?880:660, ctx.currentTime);
+    }, 350);
+    osc.start();
+    osc.stop(ctx.currentTime + durationMs/1000);
+    osc.onended = () => { clearInterval(interval); ctx.close(); };
+  } catch(e) {
+    console.warn('No se pudo reproducir la alarma:', e);
+  }
 }
 
 // Pide permiso de notificaciones, registra el service worker y guarda el
@@ -978,6 +1064,7 @@ async function initPush() {
         const n = Number(badge);
         (n>0 ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(()=>{});
       }
+      if (payload.data?.alarm==='1') triggerAlarm();
     });
     updateBellButtons();
   } catch(e) {

@@ -39,10 +39,14 @@ exports.onNewMessage = onValueCreated('/conversations/{convId}/messages/{msgId}'
     ? FAMILY_MEMBERS.filter((n) => n !== msg.from)
     : [msg.from === 'Kiomi' ? convId : 'Kiomi'];
 
-  const bodyText = msg.type === 'image' ? '📷 Imagen'
+  const isPanic = msg.type === 'panic';
+  const bodyText = isPanic ? '🚨 Toca para abrir el chat'
+    : msg.type === 'image' ? '📷 Imagen'
     : msg.type === 'audio' ? '🎤 Nota de voz'
     : (msg.text || '');
-  const title = convId === '__family__' ? `${msg.from} (Familia)` : msg.from;
+  const title = isPanic
+    ? `🚨 ALERTA DE ${msg.from.toUpperCase()}`
+    : (convId === '__family__' ? `${msg.from} (Familia)` : msg.from);
 
   await Promise.all(recipients.map(async (userKey) => {
     const [tokensSnap, unread] = await Promise.all([
@@ -55,8 +59,13 @@ exports.onNewMessage = onValueCreated('/conversations/{convId}/messages/{msgId}'
     const resp = await getMessaging().sendEachForMulticast({
       tokens,
       notification: { title, body: bodyText },
-      data: { badge: String(unread), convId: String(convId) },
-      webpush: { notification: { icon: 'public/icons/kiomi_icon.png' } },
+      data: { badge: String(unread), convId: String(convId), alarm: isPanic ? '1' : '0' },
+      webpush: {
+        notification: {
+          icon: 'public/icons/kiomi_icon.png',
+          ...(isPanic ? { requireInteraction: true, vibrate: [400, 200, 400, 200, 400, 200, 400] } : {}),
+        },
+      },
     });
 
     // Limpia tokens que ya no son válidos (app desinstalada, permiso revocado, etc.)

@@ -112,3 +112,27 @@ propio proyecto de Firebase:
 **Nota sobre iPhone**: Apple solo permite notificaciones push a páginas
 web si están instaladas en la pantalla de inicio (no funciona en una
 pestaña normal de Safari) y requiere iOS 16.4 o superior.
+
+## Botón de pánico (solo Kiomi)
+
+Kiomi tiene un botón 🚨 en la parte superior de cada chat (individual o
+familiar). Al tocarlo, pide confirmación y envía una alerta al chat activo:
+
+- El celular que la recibe **vibra** (funciona en Android; en iPhone no es
+  posible vibrar desde una página web, es una limitación de Apple) y
+  **suena una sirena** mientras la app esté abierta.
+- Con la app cerrada, llega como una notificación push normal marcada como
+  urgente — usa el mismo sonido de notificación del sistema (los
+  navegadores no permiten reproducir un sonido personalizado si la app
+  está cerrada).
+- Requiere la misma configuración de notificaciones push descrita arriba.
+
+## Si el audio no se reproduce en un iPhone
+
+Si al tocar ▶️ en una nota de voz no suena nada (y no aparece ningún error),
+lo más probable es que el **interruptor de silencio físico** del iPhone
+(el switch al lado del volumen) esté activado. iOS silencia el audio de
+las páginas web cuando ese interruptor está en modo silencio, y no hay
+forma de evitarlo desde el navegador — es una restricción de Apple.
+Revisa ese interruptor primero. Grabar audio sí funciona incluso con el
+interruptor en silencio, por eso puede parecer que "solo grabar funciona".
