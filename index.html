@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, interactive-widget=resizes-content"/>
 <title>Kiomi Chat 🌸</title>
 <link rel="manifest" href="public/manifest.json"/>
 <meta name="theme-color" content="#7c3aed"/>
@@ -31,11 +31,15 @@
 }}
 html{height:100%;overflow:hidden}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  background:var(--bg);color:var(--text);height:100dvh;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--bg);color:var(--text);height:var(--app-height,100dvh);display:flex;flex-direction:column;overflow:hidden;
   position:fixed;inset:0;width:100%}
 
 /* ── SCREENS ── */
-.screen{display:none;height:100dvh;overflow:hidden}
+/* --app-height la mantiene al día un listener de visualViewport (más abajo,
+   en el JS) para que la barra de escribir nunca quede tapada por el teclado — 100dvh
+   solo no alcanza en varios navegadores Android, que no achican el viewport
+   cuando aparece el teclado a menos que algo lo fuerce. */
+.screen{display:none;height:var(--app-height,100dvh);overflow:hidden}
 .screen.active{display:flex}
 
 /* ── SETUP ── */
@@ -175,7 +179,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 
 /* MOBILE */
 @media(max-width:600px){
-  .sidebar{width:100%;position:absolute;z-index:10;height:100dvh;
+  .sidebar{width:100%;position:absolute;z-index:10;height:var(--app-height,100dvh);
     transform:translateX(0);transition:transform .25s}
   .sidebar.hidden{transform:translateX(-100%)}
   .chat-panel{width:100%}
@@ -210,8 +214,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .audio-error{font-size:11px;color:#dc2626;padding:4px 4px 0;max-width:220px}
 
 /* ── LLAMADA DE VIDEO ── */
-.call-btn-header{background:rgba(255,255,255,.15);border:none;color:#fff;width:34px;height:34px;
-  border-radius:50%;cursor:pointer;font-size:16px;flex-shrink:0}
+.call-btn-header{background:#f97316;border:none;color:#fff;height:30px;padding:0 10px;
+  border-radius:16px;cursor:pointer;font-size:15px;flex-shrink:0;
+  display:flex;align-items:center;gap:4px;white-space:nowrap}
+.call-btn-header .call-btn-label{font-size:9px;font-weight:800;letter-spacing:.3px}
 .call-panel{position:relative;width:100%;height:100dvh;background:#0b0614;overflow:hidden;
   display:flex;flex-direction:column;align-items:center;justify-content:center}
 #call-remote-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#0b0614}
@@ -361,7 +367,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <div class="hname"><span id="g-name-text">Kiomi 🌸</span> <span id="g-conn-badge"></span></div>
         <div class="hsub" id="g-status">Cargando…</div>
       </div>
-      <button class="call-btn-header" id="g-call-btn" title="Videollamada a Kiomi">📹</button>
+      <button class="call-btn-header" id="g-call-btn" title="Videollamada a Kiomi">📱<span class="call-btn-label">OFF</span></button>
     </div>
     <div class="guest-tabs" id="g-tabs">
       <button class="guest-tab active" id="g-tab-kiomi" onclick="switchGuestMode('kiomi')">
@@ -421,7 +427,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
             <div class="hname" id="k-chat-name">—</div>
             <div class="hsub" id="k-chat-sub"></div>
           </div>
-          <button class="call-btn-header" id="k-call-btn" title="Videollamada">📹</button>
+          <button class="call-btn-header" id="k-call-btn" title="Videollamada">📱<span class="call-btn-label">OFF</span></button>
         </div>
         <div class="messages" id="k-messages"></div>
         <div class="sync-bar" id="k-sync"></div>
@@ -454,8 +460,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       <button class="call-btn call-btn-end" onclick="endCall()" title="Cancelar">📞</button>
     </div>
     <div class="call-controls" id="call-controls-ringing-in" style="display:none">
-      <button class="call-btn call-btn-accept" onclick="acceptCall()" title="Contestar videollamada">📹</button>
-      <button class="call-btn call-btn-end" onclick="declineCall()" title="Rechazar">📞</button>
+      <button class="call-btn call-btn-accept" id="call-accept-btn" title="Contestar videollamada">📹</button>
+      <button class="call-btn call-btn-end" id="call-decline-btn" title="Rechazar">📞</button>
     </div>
     <div class="call-controls" id="call-controls-active" style="display:none">
       <button class="call-btn" id="call-mute-btn" onclick="toggleCallMute()" title="Silenciar micrófono">🎤</button>
@@ -521,6 +527,46 @@ function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   $(id).classList.add('active');
 }
+
+// La barra de escribir queda pegada al fondo de --app-height (ver CSS de
+// body/.screen). En iOS esto ya funciona solo con 100dvh, pero varios
+// navegadores Android no achican el viewport cuando aparece el teclado
+// (por eso la barra quedaba tapada) — visualViewport sí nos avisa siempre
+// que el teclado abre/cierra, así que la usamos para fijar la altura real.
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const applyAppHeight = () => {
+    document.documentElement.style.setProperty('--app-height', vv.height + 'px');
+  };
+  vv.addEventListener('resize', applyAppHeight);
+  vv.addEventListener('scroll', applyAppHeight);
+  applyAppHeight();
+}
+// Cuando se enfoca el campo de texto, asegura que quede a la vista una vez
+// que termine de abrirse el teclado (el resize de arriba puede llegar
+// después de que el foco ya movió el scroll).
+document.addEventListener('focusin', e => {
+  if (e.target.matches('textarea, input')) {
+    setTimeout(() => e.target.scrollIntoView({ block:'end', behavior:'smooth' }), 300);
+  }
+});
+
+function isAppVisible() {
+  return document.visibilityState === 'visible';
+}
+
+// Al volver a primer plano (abrir la app / cambiar de pestaña de vuelta),
+// marca como leída la conversación que se está mirando en ese momento —
+// así el conteo de no-leídos baja apenas la persona realmente la ve, igual
+// que WhatsApp, sin depender de que llegue un mensaje nuevo justo entonces.
+document.addEventListener('visibilitychange', () => {
+  if (!isAppVisible() || !fbDb || !myName) return;
+  if (isKiomi) {
+    if (activeConv) markSeen(activeConv);
+  } else {
+    markSeen(guestMode==='family' ? '__family__' : fbKey(myName));
+  }
+});
 
 function esc(s) {
   return String(s||'')
@@ -675,6 +721,7 @@ function enterKiomi() {
 function logout() {
   if(!confirm('¿Salir del chat?')) return;
   stopFamilyRecording();
+  stopRingtone();
   if (callState) endCall();
   if (familyCallState) leaveFamilyCall();
   if(fbDb){
@@ -682,7 +729,7 @@ function logout() {
     fbDb.ref('conversations').off();
     fbDb.ref('presence').off();
     fbDb.ref('calls').off();
-    fbDb.ref('calls/family/active').off();
+    fbDb.ref('calls/family').off();
     if(guestListenerPath) fbDb.ref(guestListenerPath).off();
     fbDb.ref('.info/connected').off();
   }
@@ -692,6 +739,7 @@ function logout() {
   localStorage.removeItem('kc_is_kiomi');
   myName=''; isKiomi=false; activeConv=null; convCache={};
   guestMode='kiomi'; guestListenerPath=null;
+  familyIncomingShown=false; familyCallDismissed=null;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   show('s-who');
 }
@@ -769,7 +817,11 @@ function switchGuestMode(mode) {
     const messages = Object.entries(val).map(([id,m])=>({...m,id})).sort((a,b)=>a.ts-b.ts);
     if(mode==='kiomi') convCache[myName] = { messages };
     renderGuestMessages(messages);
-    markSeen(convId);
+    // Solo marca como leído si de verdad se está mirando la pantalla ahora
+    // mismo — si no, un mensaje nuevo se marcaba "leído" en el mismo
+    // instante en que llegaba (incluso con la app en segundo plano), y la
+    // bolita roja de no-leídos nunca llegaba a aparecer.
+    if (isAppVisible()) markSeen(convId);
   });
   markSeen(convId);
   $('g-tab-kiomi').classList.toggle('active', mode==='kiomi');
@@ -828,10 +880,13 @@ function enterKiomiChat() {
   fbDb.ref('conversations').on('value', snap=>{
     kiomiConvsData = snap.val()||{};
     recomputeKiomiUnread();
-    // Llegó un mensaje nuevo mientras este chat está abierto: márcalo como leído.
-    // (Se hace aquí, no dentro de recomputeKiomiUnread, para no crear un bucle
-    // con el listener de lastSeen/Kiomi de arriba.)
-    if (activeConv) markSeen(activeConv);
+    // Llegó un mensaje nuevo mientras este chat está abierto Y a la vista:
+    // márcalo como leído. (Se hace aquí, no dentro de recomputeKiomiUnread,
+    // para no crear un bucle con el listener de lastSeen/Kiomi de arriba.)
+    // El chequeo de isAppVisible() evita marcar como leído un mensaje que
+    // llegó con la app en segundo plano solo porque esa conversación había
+    // quedado como la última abierta.
+    if (activeConv && isAppVisible()) markSeen(activeConv);
   });
   attachPresence();
   attachIncomingCallListener();
@@ -1158,6 +1213,10 @@ function playRingtone() {
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     const ctx = new Ctx();
+    // Los navegadores crean el AudioContext "suspendido" hasta que haya un
+    // gesto del usuario — sin este resume() el timbre podía quedar mudo
+    // (vibraba, pero no sonaba) aunque el código corriera sin errores.
+    ctx.resume().catch(()=>{});
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
@@ -1219,7 +1278,7 @@ function attachIncomingCallListener() {
 
 function handleCallUpdate(pk, call) {
   if (!call) return;
-  if (call.status === 'ringing' && call.to === myName && !callState && !familyCallState && incomingCallShown !== pk+':'+call.ts) {
+  if (call.status === 'ringing' && call.to === myName && !callState && !familyCallState && !familyIncomingShown && incomingCallShown !== pk+':'+call.ts) {
     incomingCallShown = pk+':'+call.ts;
     showIncomingCall(pk, call);
     return;
@@ -1393,7 +1452,10 @@ function showCallScreen(kind, otherName) {
   $('call-controls-active').style.display      = kind==='active'   ? 'flex' : 'none';
   $('call-status').textContent = kind==='outgoing' ? 'Llamando…' : kind==='incoming' ? 'Te está llamando…' : '00:00';
   if (callState && callState.localStream) $('call-local-video').srcObject = callState.localStream;
+  $('call-accept-btn').onclick = acceptCall;
+  $('call-decline-btn').onclick = declineCall;
   $('call-active-end-btn').onclick = endCall;
+  updateCallLiveIndicator();
   show('s-call');
 }
 
@@ -1402,6 +1464,7 @@ function hideCallScreen() {
   $('call-local-video').srcObject = null;
   $('call-grid').innerHTML = '';
   if (isKiomi) show('s-kiomi-chat'); else show('s-guest-chat');
+  updateCallLiveIndicator();
 }
 
 function getActiveLocalStream() {
@@ -1434,18 +1497,81 @@ function familyPairKey(a, b) {
   return [a, b].sort().join('__');
 }
 
-let familyCallActive = false; // último valor conocido de calls/family/active
+let familyCallActive = false;    // último valor conocido de calls/family.active
+let familyCallDismissed = null;  // startedAt de una llamada familiar que ya se rechazó/cerró localmente
+let familyIncomingShown = false; // si se está mostrando ahora mismo el aviso de llamada familiar entrante
 
+// Escucha calls/family entero (no solo /active) para poder, además de
+// prender el ícono en verde, hacer sonar y aparecer la pantalla de llamada
+// entrante a TODOS los miembros no importa qué estén mirando en ese
+// momento — igual que ya pasaba con las llamadas 1:1, y como hace WhatsApp
+// con las llamadas grupales.
 function attachFamilyCallIndicator() {
-  fbDb.ref('calls/family/active').on('value', snap => {
-    familyCallActive = !!snap.val();
+  fbDb.ref('calls/family').on('value', snap => {
+    const call = snap.val();
+    familyCallActive = !!(call && call.active);
     updateCallLiveIndicator();
+    handleFamilyCallChange(call);
   });
 }
 
+function handleFamilyCallChange(call) {
+  if (!call || !call.active) {
+    if (familyIncomingShown) { familyIncomingShown = false; stopRingtone(); hideCallScreen(); }
+    familyCallDismissed = null;
+    return;
+  }
+  const myKey = fbKey(myName);
+  const alreadyIn = !!familyCallState || !!(call.participants && call.participants[myKey]);
+  if (alreadyIn) {
+    if (familyIncomingShown) { familyIncomingShown = false; stopRingtone(); }
+    return;
+  }
+  if (call.startedBy === myName || callState || familyCallDismissed === call.startedAt || familyIncomingShown) return;
+  familyIncomingShown = true;
+  showIncomingFamilyCall(call);
+}
+
+function showIncomingFamilyCall(call) {
+  playRingtone();
+  $('call-grid').style.display = 'none';
+  $('call-remote-video').style.display = 'none';
+  $('call-local-video').style.display = 'none';
+  $('call-name').textContent = 'Familia';
+  $('call-avatar').textContent = '👨‍👩‍👧‍👦';
+  $('call-status').textContent = (call.startedBy||'Alguien')+' te está llamando…';
+  $('call-controls-ringing-out').style.display = 'none';
+  $('call-controls-ringing-in').style.display  = 'flex';
+  $('call-controls-active').style.display      = 'none';
+  $('call-accept-btn').onclick = acceptFamilyCall;
+  $('call-decline-btn').onclick = () => declineFamilyCall(call.startedAt);
+  updateCallLiveIndicator();
+  show('s-call');
+}
+
+function acceptFamilyCall() {
+  stopRingtone();
+  familyIncomingShown = false;
+  joinFamilyCall();
+}
+
+function declineFamilyCall(startedAt) {
+  stopRingtone();
+  familyIncomingShown = false;
+  familyCallDismissed = startedAt;
+  hideCallScreen();
+}
+
 function updateCallLiveIndicator() {
-  if ($('g-call-btn')) $('g-call-btn').classList.toggle('call-live', familyCallActive && guestMode==='family');
-  if ($('k-call-btn')) $('k-call-btn').classList.toggle('call-live', familyCallActive && activeConv==='__family__');
+  const gBtn = $('g-call-btn'), kBtn = $('k-call-btn');
+  if (gBtn) setCallBtnLive(gBtn, guestMode==='family' ? familyCallActive : !!(callState && callState.otherParty==='Kiomi'));
+  if (kBtn) setCallBtnLive(kBtn, activeConv==='__family__' ? familyCallActive : !!(callState && callState.otherParty===activeConv));
+}
+
+function setCallBtnLive(btn, live) {
+  btn.classList.toggle('call-live', live);
+  const label = btn.querySelector('.call-btn-label');
+  if (label) label.textContent = live ? '¡LLAMANDO!' : 'OFF';
 }
 
 async function joinFamilyCall() {
@@ -1458,13 +1584,17 @@ async function joinFamilyCall() {
     return;
   }
   const myKey = fbKey(myName);
-  familyCallState = { localStream, peers:{} };
+  familyCallState = { localStream, peers:{}, startedAt:null };
   showGroupCallScreen();
   addLocalTile(localStream);
 
-  const activeSnap = await fbDb.ref('calls/family/active').once('value');
-  if (!activeSnap.val()) {
-    await fbDb.ref('calls/family').update({ active:true, startedBy:myName, startedAt:Date.now() });
+  const existing = (await fbDb.ref('calls/family').once('value')).val();
+  if (existing && existing.active) {
+    familyCallState.startedAt = existing.startedAt;
+  } else {
+    const startedAt = Date.now();
+    familyCallState.startedAt = startedAt;
+    await fbDb.ref('calls/family').update({ active:true, startedBy:myName, startedAt });
   }
   const partRef = fbDb.ref('calls/family/participants/'+myKey);
   await partRef.set({ name:myName, joinedAt:Date.now() });
@@ -1549,6 +1679,10 @@ function removeFamilyPeer(otherKey) {
 async function leaveFamilyCall() {
   if (!familyCallState) return;
   const myKey = fbKey(myName);
+  // Si la llamada sigue activa para los demás, evita que el mismo instante
+  // en que uno se va, calls/family (todavía activo) lo haga sonar de nuevo
+  // como si fuera una llamada entrante nueva.
+  familyCallDismissed = familyCallState.startedAt;
   fbDb.ref('calls/family/participants').off();
   Object.keys(familyCallState.peers).forEach(k => removeFamilyPeer(k));
   const partRef = fbDb.ref('calls/family/participants/'+myKey);
@@ -1576,6 +1710,7 @@ function showGroupCallScreen() {
   $('call-cam-btn').classList.remove('off');
   $('call-status').textContent = 'Llamada familiar';
   $('call-active-end-btn').onclick = leaveFamilyCall;
+  updateCallLiveIndicator();
   show('s-call');
 }
 

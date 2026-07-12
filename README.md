@@ -122,14 +122,16 @@ despliega la función. Si prefieres hacerlo a mano, sigue estos pasos:
 web si están instaladas en la pantalla de inicio (no funciona en una
 pestaña normal de Safari) y requiere iOS 16.4 o superior.
 
-## Llamadas de video (ícono 📹)
+## Llamadas de video (botón 📱)
 
-Cualquier invitado y Kiomi pueden llamarse por video con el ícono 📹 del
-header. Al llamar:
+Cualquier invitado y Kiomi pueden llamarse por video con el botón 📱 del
+header. En reposo dice **"OFF"** con fondo naranja; en cuanto hay una
+llamada (sonando o en curso) se pone **verde** y parpadea. Al llamar:
 
-- El otro lado ve una pantalla de llamada entrante con opción de
-  contestar (📹) o rechazar (📞), y suena un timbre + vibra (Android; en
-  iPhone no es posible vibrar desde una web) mientras la app esté abierta.
+- El otro lado ve, sin importar en qué pantalla de la app esté en ese
+  momento, una pantalla de llamada entrante con opción de contestar (📹) o
+  rechazar (📞), y suena un timbre + vibra (Android; en iPhone no es
+  posible vibrar desde una web) mientras la app esté abierta.
 - Con la app cerrada, llega como notificación push para avisar que hay
   una llamada — al tocarla se abre la app.
 - Requiere la misma configuración de notificaciones push descrita arriba
@@ -146,20 +148,23 @@ pasa seguido, se puede agregar un servidor TURN más adelante.
 
 ### Videollamada grupal (chat familiar)
 
-En el chat "Familia" el mismo ícono 📹 inicia o se une a una **videollamada
-grupal**: todos los que la toquen entran a la misma llamada (no hace falta
-"contestar" uno por uno, es como un link de reunión). Cada participante se
-conecta directo con todos los demás (sin servidor de video intermedio), así
-que funciona mejor con 2-4 personas conectadas a la vez — con más gente el
-consumo de datos y de batería de cada teléfono sube bastante, porque cada
-uno envía su cámara a todos los demás por separado.
+En el chat "Familia" el mismo botón 📱 inicia o se une a una **videollamada
+grupal**. A diferencia de antes, ahora suena y aparece la pantalla de
+llamada entrante **automáticamente para los demás miembros, sin importar
+en qué chat/pestaña estén mirando** — igual que una llamada grupal de
+WhatsApp — no hace falta estar parado en la pestaña Familia para enterarse.
+Cada participante se conecta directo con todos los demás (sin servidor de
+video intermedio), así que funciona mejor con 2-4 personas conectadas a la
+vez — con más gente el consumo de datos y de batería de cada teléfono sube
+bastante, porque cada uno envía su cámara a todos los demás por separado.
 
-- Mientras hay una llamada familiar activa, el ícono 📹 del header se pone
-  **verde y parpadea** para todos (tanto en la pestaña Familia de cada
-  invitado como en el chat Familia de Kiomi) — así se nota que hay gente
-  conectada y pueden sumarse.
+- Mientras hay una llamada familiar activa, el botón 📱 se pone **verde y
+  parpadea** para todos.
 - Con la app cerrada, apenas empieza la llamada llega una notificación push
   a todos los miembros de la familia (menos a quien la inició) para avisar.
+- Quien rechaza o cuelga no vuelve a sonarle por esa misma llamada puntual
+  (aunque siga activa para los demás) — pero si se corta del todo y alguien
+  arranca una llamada nueva, ahí sí vuelve a sonar para todos.
 - Cada quien sale con el botón de colgar (📞); cuando se va el último
   participante la llamada se cierra sola.
 - Aplican las mismas limitaciones de red (solo STUN) que en las llamadas
@@ -197,6 +202,35 @@ agregó `skipWaiting()`/`clients.claim()` para que la versión nueva tome el
 control enseguida, pero por las dudas: **cerrá completamente la app (o el
 navegador) y volvé a abrirla** después de actualizar el código, así el
 service worker nuevo se activa del todo.
+
+### Bolita roja / número sin actualizar solo para los invitados (no Kiomi)
+
+Había otra causa distinta, específica de los invitados: la pantalla activa
+(la pestaña "Kiomi" o "Familia" que se estuviera mirando) marcaba un
+mensaje nuevo como "leído" en el mismo instante en que llegaba —incluso con
+la app en segundo plano o el celular bloqueado—, así que la bolita roja y
+el número nunca llegaban a aparecer (parecía que "funcionaba una vez y
+después no" porque a veces alcanzaba a mostrarse un instante antes de
+corregirse solo). Ya se corrigió: ahora solo se marca como leído si la
+persona de verdad está mirando la app en ese momento (la pantalla
+encendida y esa pestaña al frente); si no, el mensaje queda como no-leído
+—con su bolita, su número y su aviso en el ícono de inicio— hasta que
+alguien realmente lo abre.
+
+## La barra de escribir tapada por el teclado
+
+En varios celulares Android, al abrir el teclado la barra donde se escribe
+el mensaje quedaba tapada — el navegador no achicaba el espacio disponible
+de la página cuando aparecía el teclado, así que la barra terminaba
+"debajo" de él aunque en el código estuviera pegada al fondo de la
+pantalla. Se corrigió con dos cambios que se complementan: se le pide al
+navegador que sí achique la página cuando el teclado se abre
+(`interactive-widget=resizes-content` en el `<meta viewport>`, la forma
+recomendada para Chrome/Android), y además la app escucha directamente el
+tamaño real de la pantalla visible (`visualViewport`) para ajustarse sola
+incluso en navegadores donde eso no alcance. En iPhone esto ya funcionaba
+razonablemente bien antes; estos cambios lo hacen más consistente ahí
+también.
 
 ## Si el audio no se reproduce en un iPhone
 
