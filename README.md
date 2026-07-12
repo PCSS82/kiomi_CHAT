@@ -130,8 +130,15 @@ llamada (sonando o en curso) se pone **verde** y parpadea. Al llamar:
 
 - El otro lado ve, sin importar en qué pantalla de la app esté en ese
   momento, una pantalla de llamada entrante con opción de contestar (📹) o
-  rechazar (📞), y suena un timbre + vibra (Android; en iPhone no es
-  posible vibrar desde una web) mientras la app esté abierta.
+  rechazar (📞), y suena un timbre (archivo real, `public/sounds/ringtone.wav`,
+  en loop) + vibra (Android; en iPhone no es posible vibrar desde una web)
+  mientras la app esté abierta. El timbre usa un `<audio>` real (no un tono
+  generado por código) más la Media Session API — los navegadores tratan
+  eso como reproducción de música/podcast, así que en Android es bastante
+  más resistente a silenciarse solo al pasar la app a segundo plano (otra
+  app abierta, pantalla apagada) que un sonido generado con la Web Audio
+  API cruda. En iPhone esto **no** cambia el límite ya conocido: Safari
+  suspende la página (audio incluido) apenas se sale de verdad de la app.
 - Con la app cerrada, llega como notificación push para avisar que hay
   una llamada — al tocarla se abre la app.
 - Requiere la misma configuración de notificaciones push descrita arriba

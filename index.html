@@ -449,6 +449,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 
 <!-- ══ LLAMADA DE VIDEO ══ -->
 <div class="screen" id="s-call">
+  <!-- Timbre como elemento <audio> real (no Web Audio API cruda): los
+       navegadores tratan la reproducción de medios como "legítima" y son
+       mucho menos propensos a silenciarla en segundo plano, sobre todo en
+       Android — ver playRingtone()/stopRingtone(). -->
+  <audio id="ringtone-audio" src="public/sounds/ringtone.wav" loop preload="auto"></audio>
   <div class="call-panel">
     <video id="call-remote-video" autoplay playsinline></video>
     <video id="call-local-video" autoplay playsinline muted></video>
@@ -1222,46 +1227,44 @@ function attachFamilyReceipts() {
   });
 }
 
-// Suena un timbre sintetizado (sin archivo de audio) y vibra (Android;
-// iPhone/Safari no soporta vibrar desde la web) mientras hay una llamada
-// entrante sonando, hasta que se conteste o se corte.
-let activeRingtone = null;
-
+// Suena un timbre (archivo real public/sounds/ringtone.wav, en loop) y
+// vibra (Android; iPhone/Safari no soporta vibrar desde la web) mientras
+// hay una llamada entrante sonando, hasta que se conteste o se corte.
+//
+// Usa un elemento <audio> real en vez de un tono generado con la Web Audio
+// API cruda: los navegadores tratan la reproducción de un <audio>/<video>
+// como "medios legítimos" (como una app de música) y son mucho menos
+// propensos a silenciarla cuando la pestaña pasa a segundo plano — sobre
+// todo en Android, sumado a la Media Session API de abajo. En iPhone esto
+// sigue teniendo el mismo límite ya documentado en el README: Safari
+// suspende la ejecución de la página (audio incluido) apenas se sale
+// realmente de la app (otra app, pantalla de inicio) — ahí no hay truco de
+// código que lo evite, es una restricción del sistema operativo.
 function playRingtone() {
   stopRingtone();
   if (navigator.vibrate) navigator.vibrate(Array(60).fill([500,300]).flat());
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    const ctx = new Ctx();
-    // Los navegadores crean el AudioContext "suspendido" hasta que haya un
-    // gesto del usuario — sin este resume() el timbre podía quedar mudo
-    // (vibraba, pero no sonaba) aunque el código corriera sin errores.
-    ctx.resume().catch(()=>{});
-    const osc  = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(600, ctx.currentTime);
-    gain.gain.value = 0.2;
-    osc.connect(gain); gain.connect(ctx.destination);
-    let on = true;
-    const interval = setInterval(() => {
-      on = !on;
-      gain.gain.setValueAtTime(on?0.2:0, ctx.currentTime);
-    }, 500);
-    osc.start();
-    activeRingtone = { ctx, osc, interval };
-  } catch(e) {
-    console.warn('No se pudo reproducir el timbre:', e);
+  const audio = $('ringtone-audio');
+  if (audio) {
+    audio.currentTime = 0;
+    audio.play().catch(e => console.warn('No se pudo reproducir el timbre:', e));
+  }
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Llamada entrante — Kiomi Chat',
+        artist: 'Tocá para contestar',
+      });
+      navigator.mediaSession.playbackState = 'playing';
+    } catch(e) {}
   }
 }
 
 function stopRingtone() {
   if (navigator.vibrate) navigator.vibrate(0);
-  if (activeRingtone) {
-    clearInterval(activeRingtone.interval);
-    try { activeRingtone.osc.stop(); } catch(e) {}
-    try { activeRingtone.ctx.close(); } catch(e) {}
-    activeRingtone = null;
+  const audio = $('ringtone-audio');
+  if (audio) { audio.pause(); audio.currentTime = 0; }
+  if ('mediaSession' in navigator) {
+    try { navigator.mediaSession.playbackState = 'none'; } catch(e) {}
   }
 }
 
