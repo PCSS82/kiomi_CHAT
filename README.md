@@ -79,7 +79,14 @@ La app instalada (PWA en GitHub Pages) puede avisar con una notificación —
 como WhatsApp— y mostrar el número de mensajes sin leer en el ícono,
 incluso con el teléfono bloqueado o la app cerrada. Esto necesita un poco
 de configuración que solo tú puedes hacer, porque requiere acceso a tu
-propio proyecto de Firebase:
+propio proyecto de Firebase.
+
+**Atajo con PowerShell (Windows)**: si ya tienes tu plan Blaze activado y
+tu clave VAPID generada (pasos 1 y 2 de abajo, son de la consola de
+Firebase y no se pueden automatizar), corre `.\configurar_notificaciones.ps1`
+desde la raíz del repo — instala la Firebase CLI si falta, inicia sesión,
+pega tu clave VAPID y tu `firebaseConfig` en los archivos correctos, y
+despliega la función. Si prefieres hacerlo a mano, sigue estos pasos:
 
 1. **Activa el plan Blaze (pago por uso)** en tu proyecto: consola de
    Firebase → ⚙️ Configuración del proyecto → Uso y facturación → Modificar
