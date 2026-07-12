@@ -1722,6 +1722,11 @@ async function joinFamilyCall() {
     const startedAt = Date.now();
     familyCallState.startedAt = startedAt;
     await fbDb.ref('calls/family').update({ active:true, startedBy:myName, startedAt });
+    // Nadie más estaba en la llamada todavía: es quien la está iniciando,
+    // así que le suena el tono de "discado" (igual que en una llamada 1:1)
+    // hasta que se una el primer familiar — antes no sonaba nada y parecía
+    // que la llamada no había salido.
+    playRingback();
   }
   const partRef = fbDb.ref('calls/family/participants/'+myKey);
   await partRef.set({ name:myName, joinedAt:Date.now() });
@@ -1731,6 +1736,7 @@ async function joinFamilyCall() {
     if (!familyCallState) return;
     const otherKey = snap.key;
     if (otherKey === myKey) return;
+    stopRingback();
     const data = snap.val() || {};
     connectToFamilyPeer(otherKey, data.name || otherKey);
   });
@@ -1806,6 +1812,7 @@ function removeFamilyPeer(otherKey) {
 async function leaveFamilyCall() {
   if (!familyCallState) return;
   const myKey = fbKey(myName);
+  stopRingback();
   // Si la llamada sigue activa para los demás, evita que el mismo instante
   // en que uno se va, calls/family (todavía activo) lo haga sonar de nuevo
   // como si fuera una llamada entrante nueva.
