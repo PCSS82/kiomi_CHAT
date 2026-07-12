@@ -72,35 +72,29 @@ try {
     exit 1
 }
 
-# ---------- 2. Instalar Firebase CLI ----------
+# ---------- 2. Firebase CLI ----------
+# Se usa "npx firebase-tools" en vez de instalar el paquete global y depender
+# de que "firebase" quede en el PATH (en Windows eso falla seguido y obliga
+# a cerrar y volver a abrir la terminal). npx lo descarga/cachea solo, sin
+# tocar el PATH del sistema.
 Write-Host ""
-Write-Host "  [3/7] Verificando Firebase CLI..." -ForegroundColor Cyan
-$fbInstalled = Get-Command firebase -ErrorAction SilentlyContinue
-if (-not $fbInstalled) {
-    Write-Host "       Instalando firebase-tools (npm install -g firebase-tools)..." -ForegroundColor Yellow
-    npm install -g firebase-tools
-    # Refresca el PATH de esta misma ventana para que "firebase" se reconozca
-    # sin tener que cerrar y volver a abrir PowerShell.
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-    $fbInstalled = Get-Command firebase -ErrorAction SilentlyContinue
-    if (-not $fbInstalled) {
-        Write-Host "  ERROR: firebase-tools se instaló pero esta ventana de PowerShell no lo detecta todavía." -ForegroundColor Red
-        Write-Host "  Cierra esta ventana, abre una NUEVA, entra a la carpeta $(Get-Location) y vuelve a correr este script." -ForegroundColor Red
-        exit 1
-    }
-} else {
-    Write-Host "       Firebase CLI ya esta instalada ✓" -ForegroundColor Green
+Write-Host "  [3/7] Preparando Firebase CLI (vía npx, sin instalación global)..." -ForegroundColor Cyan
+npx --yes firebase-tools --version
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  ERROR: no se pudo ejecutar firebase-tools con npx. Revisa tu conexión a internet e inténtalo de nuevo." -ForegroundColor Red
+    exit 1
 }
+Write-Host "       Firebase CLI lista ✓" -ForegroundColor Green
 
 # ---------- 3. Login y elegir proyecto ----------
 Write-Host ""
 Write-Host "  [4/7] Iniciando sesion en Firebase..." -ForegroundColor Cyan
 Write-Host "       Se abrira tu navegador. Usa la cuenta de Google donde creaste el proyecto de Kiomi Chat." -ForegroundColor Gray
-firebase login
+npx firebase-tools login
 
 Write-Host ""
 Write-Host "  Elige tu proyecto de Firebase de la lista:" -ForegroundColor Cyan
-firebase use --add
+npx firebase-tools use --add
 
 # ---------- 4. Pedir clave VAPID y firebaseConfig ----------
 Write-Host ""
@@ -163,7 +157,7 @@ Write-Host "  [7/7] Desplegando la funcion de notificaciones..." -ForegroundColo
 Push-Location functions
 npm install
 Pop-Location
-firebase deploy --only functions
+npx firebase-tools deploy --only functions
 
 Write-Host ""
 Write-Host "  ============================================" -ForegroundColor Green
