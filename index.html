@@ -535,15 +535,17 @@ function show(id) {
 // navegadores Android no achican el viewport cuando aparece el teclado
 // (por eso la barra quedaba tapada) — visualViewport sí nos avisa siempre
 // que el teclado abre/cierra, así que la usamos para fijar la altura real.
-// Además, algunos iPhone corren la página un poco hacia arriba al enfocar
-// un campo de texto (visualViewport.offsetTop > 0) sin que el layout fijo
-// (position:fixed) se entere — por eso se compensa con un translateY, para
-// que la barra quede pegada arriba del teclado y no un poco más abajo.
+// NOTA: antes esto además compensaba con un translateY en <body> cuando
+// visualViewport.offsetTop cambiaba, pero ese offsetTop puede saltar de
+// forma transitoria (por ejemplo, justo al mandar un mensaje y vaciar el
+// textarea) — eso hacía que toda la pantalla, header incluido, se corriera
+// para abajo y volviera a subir. Se sacó: solo con el alto (vv.height) ya
+// alcanza para que la barra quede pegada arriba del teclado, sin mover el
+// header nunca.
 if (window.visualViewport) {
   const vv = window.visualViewport;
   const applyAppHeight = () => {
     document.documentElement.style.setProperty('--app-height', vv.height + 'px');
-    document.body.style.transform = vv.offsetTop ? `translateY(${vv.offsetTop}px)` : '';
   };
   vv.addEventListener('resize', applyAppHeight);
   vv.addEventListener('scroll', applyAppHeight);
