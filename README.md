@@ -72,3 +72,43 @@ timestamp,sala,usuario,mensaje
 - Sin registro de email
 - Red local WiFi únicamente
 - Conversaciones archivadas en GitHub para supervisión parental
+
+## Notificaciones push (app instalada — `index.html` + Firebase)
+
+La app instalada (PWA en GitHub Pages) puede avisar con una notificación —
+como WhatsApp— y mostrar el número de mensajes sin leer en el ícono,
+incluso con el teléfono bloqueado o la app cerrada. Esto necesita un poco
+de configuración que solo tú puedes hacer, porque requiere acceso a tu
+propio proyecto de Firebase:
+
+1. **Activa el plan Blaze (pago por uso)** en tu proyecto: consola de
+   Firebase → ⚙️ Configuración del proyecto → Uso y facturación → Modificar
+   plan → Blaze. Es necesario para poder usar Cloud Functions — el gasto
+   real de una app familiar como esta normalmente cae dentro de la capa
+   gratuita incluida en Blaze, pero Google igual pide vincular una tarjeta.
+2. **Genera tu clave VAPID**: consola de Firebase → ⚙️ Configuración del
+   proyecto → pestaña "Cloud Messaging" → sección "Web Push certificates" →
+   "Generar par de claves". Copia la clave.
+3. Pega esa clave en `index.html`, en la constante `FCM_VAPID_KEY` (al
+   inicio del `<script>`, reemplaza `'PEGAR_AQUI_TU_VAPID_KEY_DE_FIREBASE'`).
+4. Abre `firebase-messaging-sw.js` y pega ahí el mismo objeto
+   `firebaseConfig` que ya usaste al configurar la app la primera vez
+   (pantalla "Configuración inicial"). Un service worker no puede leer el
+   `localStorage` de la página, así que necesita su propia copia.
+5. Instala la CLI de Firebase y despliega la función que envía las
+   notificaciones:
+   ```bash
+   npm install -g firebase-tools
+   firebase login
+   firebase use --add          # elige tu proyecto de Firebase
+   firebase deploy --only functions
+   ```
+6. Sube los cambios (`index.html`, `firebase-messaging-sw.js`) a GitHub
+   Pages como siempre.
+7. En cada celular, abre la app y toca el ícono 🔔 (aparece en el chat de
+   Kiomi y en el chat de cada invitado) para activar las notificaciones en
+   ese dispositivo. Hay que hacerlo una vez por dispositivo.
+
+**Nota sobre iPhone**: Apple solo permite notificaciones push a páginas
+web si están instaladas en la pantalla de inicio (no funciona en una
+pestaña normal de Safari) y requiere iOS 16.4 o superior.

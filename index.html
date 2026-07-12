@@ -12,6 +12,7 @@
 <link rel="icon" href="public/icons/kiomi_icon.png"/>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -110,8 +111,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .chat-header .info{flex:1}
 .chat-header .hname{font-weight:700;font-size:15px}
 .chat-header .hsub{font-size:12px;opacity:.75}
-.chat-header .logout-btn{background:rgba(255,255,255,.15);border:none;color:#fff;
-  width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:15px}
+.chat-header .logout-btn,.sidebar-header .logout-btn{background:rgba(255,255,255,.15);border:none;color:#fff;
+  width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:15px;flex-shrink:0}
 
 .messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:4px}
 .date-chip{text-align:center;margin:8px auto;font-size:11px;color:var(--muted);
@@ -307,6 +308,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <div class="hsub" id="g-status">Cargando…</div>
       </div>
       <button class="family-tab-btn" id="g-family-btn" style="display:none" onclick="toggleGuestMode()">👨‍👩‍👧‍👦 Familia</button>
+      <button class="logout-btn" id="g-bell-btn" style="display:none" onclick="initPush()" title="Activar notificaciones">🔔</button>
       <button class="logout-btn" onclick="logout()">⚙️</button>
     </div>
     <div class="messages" id="g-messages"></div>
@@ -332,6 +334,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <img src="public/icons/kiomi_icon.png" alt="Kiomi"/>
         <span class="hname">Kiomi Chat</span>
         <span class="badge" id="k-unread-total" style="display:none">0</span>
+        <button class="logout-btn" id="k-bell-btn" style="display:none" onclick="initPush()" title="Activar notificaciones">🔔</button>
       </div>
       <div class="presence-bar" id="k-presence-bar" style="display:none"></div>
       <div class="sidebar-search">
@@ -391,6 +394,7 @@ const DEFAULT_PIN   = 'kiomi2024';    // PIN por defecto (cambiar en settings)
 const FAMILY_PATH   = 'conversations/__family__'; // chat grupal: Kiomi, Koji, Ami, Mamá, Papá
 const FAMILY_MEMBERS= ['kiomi','koji','ami','mama','papa'];
 const MAX_RECORD_MS = 60000; // tope de duración de audio (60s) para no crecer demasiado en la BD
+const FCM_VAPID_KEY = 'PEGAR_AQUI_TU_VAPID_KEY_DE_FIREBASE'; // Configuración del proyecto → Cloud Messaging → Web Push certificates
 
 // ══════════════════════════════════════════
 //  ESTADO
@@ -596,6 +600,7 @@ function logout() {
     fbDb.ref('.info/connected').off();
   }
   clearInterval(presenceTimer);
+  if (navigator.clearAppBadge) navigator.clearAppBadge().catch(()=>{});
   localStorage.removeItem('kc_name');
   localStorage.removeItem('kc_is_kiomi');
   myName=''; isKiomi=false; activeConv=null; convCache={};
@@ -638,19 +643,23 @@ function enterGuestChat() {
   $('g-family-btn').style.display = isFamilyMember(myName) ? '' : 'none';
   switchGuestMode('kiomi');
   attachPresence();
+  updateBellButtons();
 }
 
 // Cambia la vista guest entre el 1:1 con Kiomi y el grupo familiar
 function switchGuestMode(mode) {
   guestMode = mode;
   if(guestListenerPath) fbDb.ref(guestListenerPath).off();
-  guestListenerPath = mode==='family' ? FAMILY_PATH+'/messages' : 'conversations/'+fbKey(myName)+'/messages';
+  const convId = mode==='family' ? '__family__' : fbKey(myName);
+  guestListenerPath = 'conversations/'+convId+'/messages';
   fbDb.ref(guestListenerPath).on('value', snap=>{
     const val = snap.val()||{};
     const messages = Object.values(val).sort((a,b)=>a.ts-b.ts);
     if(mode==='kiomi') convCache[myName] = { messages };
     renderGuestMessages(messages);
+    markSeen(convId);
   });
+  markSeen(convId);
   $('g-name-text').textContent = mode==='family' ? 'Familia' : 'Kiomi 🌸';
   $('g-family-btn').textContent = mode==='family' ? '💬 Kiomi' : '👨‍👩‍👧‍👦 Familia';
   $('g-avatar-img').style.display = mode==='family' ? 'none' : '';
@@ -711,7 +720,7 @@ function enterKiomiChat() {
       const unread   = messages.filter(m=>m.from!=='Kiomi'&&m.ts>lastSeen).length;
       convCache[name] = { messages, lastSeen, unread };
       unreadTotal += unread;
-      if(activeConv===name) renderKiomiMessages(messages);
+      if(activeConv===name) { renderKiomiMessages(messages); markSeen(name); }
     });
 
     renderConvList();
@@ -721,8 +730,12 @@ function enterKiomiChat() {
     } else {
       $('k-unread-total').style.display='none';
     }
+    if (navigator.setAppBadge) {
+      (unreadTotal>0 ? navigator.setAppBadge(unreadTotal) : navigator.clearAppBadge()).catch(()=>{});
+    }
   });
   attachPresence();
+  updateBellButtons();
 }
 
 function renderConvList() {
@@ -800,6 +813,7 @@ function openConv(name) {
   $('k-mic-btn').style.display    = isFam ? 'flex' : 'none';
   renderKiomiMessages(c.messages||[]);
   renderConvList();
+  markSeen(name);
   // Mobile: esconder sidebar
   if(window.innerWidth<=600) $('k-sidebar').classList.add('hidden');
 }
@@ -924,6 +938,58 @@ async function onFamilyRecordingStop() {
   } finally {
     sending = false;
   }
+}
+
+// ══════════════════════════════════════════
+//  NOTIFICACIONES PUSH + BADGE DEL ÍCONO
+// ══════════════════════════════════════════
+
+// Guarda cuándo fue la última vez que "myName" vio una conversación,
+// para que la Cloud Function pueda calcular cuántos mensajes no ha leído.
+function markSeen(convId) {
+  if (!fbDb || !myName) return;
+  fbDb.ref('lastSeen/'+fbKey(myName)+'/'+convId).set(Date.now());
+  // Aproximación: al abrir cualquier chat, limpiamos el badge de este dispositivo.
+  // El próximo mensaje nuevo lo recalculará correctamente vía push.
+  if (!isKiomi && navigator.clearAppBadge) navigator.clearAppBadge().catch(()=>{});
+}
+
+// Pide permiso de notificaciones, registra el service worker y guarda el
+// token de este dispositivo en Firebase para que la Cloud Function le
+// pueda enviar avisos cuando llegue un mensaje nuevo.
+async function initPush() {
+  if (!('serviceWorker' in navigator) || !('Notification' in window) || !firebase.messaging) {
+    alert('Este navegador no soporta notificaciones push.');
+    return;
+  }
+  try {
+    const reg  = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { alert('No se activaron las notificaciones.'); return; }
+    const messaging = firebase.messaging();
+    const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg });
+    if (token && myName) await fbDb.ref('fcmTokens/'+fbKey(myName)+'/'+token).set(true);
+    messaging.onMessage(payload => {
+      const title = payload.notification?.title || 'Kiomi Chat';
+      const body  = payload.notification?.body  || '';
+      if (Notification.permission==='granted') new Notification(title, { body, icon:'public/icons/kiomi_icon.png' });
+      const badge = payload.data?.badge;
+      if (badge!=null && navigator.setAppBadge) {
+        const n = Number(badge);
+        (n>0 ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(()=>{});
+      }
+    });
+    updateBellButtons();
+  } catch(e) {
+    console.warn('No se pudieron activar las notificaciones:', e);
+    alert('No se pudieron activar las notificaciones: '+e.message);
+  }
+}
+
+function updateBellButtons() {
+  const granted = ('Notification' in window) && Notification.permission==='granted';
+  if ($('g-bell-btn')) $('g-bell-btn').style.display = granted ? 'none' : '';
+  if ($('k-bell-btn')) $('k-bell-btn').style.display = granted ? 'none' : '';
 }
 
 // ══════════════════════════════════════════
