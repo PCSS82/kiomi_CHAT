@@ -113,8 +113,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .chat-header .info{flex:1}
 .chat-header .hname{font-weight:700;font-size:15px}
 .chat-header .hsub{font-size:12px;opacity:.75}
-.chat-header .logout-btn,.sidebar-header .logout-btn{background:rgba(255,255,255,.15);border:none;color:#fff;
-  width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:15px;flex-shrink:0}
 
 .messages{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px;display:flex;flex-direction:column;gap:4px}
 .date-chip{text-align:center;margin:8px auto;font-size:11px;color:var(--muted);
@@ -316,7 +314,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <div class="hsub" id="g-status">Cargando…</div>
       </div>
       <button class="family-tab-btn" id="g-family-btn" style="display:none" onclick="toggleGuestMode()">👨‍👩‍👧‍👦 Familia</button>
-      <button class="logout-btn" id="g-bell-btn" style="display:none" onclick="initPush()" title="Activar notificaciones">🔔</button>
     </div>
     <div class="messages" id="g-messages"></div>
     <div class="sync-bar" id="g-sync"></div>
@@ -341,7 +338,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <img src="public/icons/kiomi_icon.png" alt="Kiomi"/>
         <span class="hname">Kiomi Chat</span>
         <span class="badge" id="k-unread-total" style="display:none">0</span>
-        <button class="logout-btn" id="k-bell-btn" style="display:none" onclick="initPush()" title="Activar notificaciones">🔔</button>
       </div>
       <div class="presence-bar" id="k-presence-bar" style="display:none"></div>
       <div class="sidebar-search">
@@ -654,7 +650,8 @@ function enterGuestChat() {
   $('g-family-btn').style.display = isFamilyMember(myName) ? '' : 'none';
   switchGuestMode('kiomi');
   attachPresence();
-  updateBellButtons();
+  attachGuestBadge();
+  silentlyInitPush();
 }
 
 // Cambia la vista guest entre el 1:1 con Kiomi y el grupo familiar
@@ -736,7 +733,7 @@ function enterKiomiChat() {
     if (activeConv) markSeen(activeConv);
   });
   attachPresence();
-  updateBellButtons();
+  silentlyInitPush();
 }
 
 function recomputeKiomiUnread() {
@@ -976,14 +973,44 @@ function markSeen(convId) {
   if (!fbDb || !myName) return;
   const now = Date.now();
   fbDb.ref('lastSeen/'+fbKey(myName)+'/'+convId).set(now);
+  // Actualización local optimista: no esperar el viaje de ida y vuelta a Firebase.
   if (isKiomi) {
-    // Actualización local optimista: no esperar el viaje de ida y vuelta a Firebase.
     kiomiLastSeenMap[convId] = now;
     if (convCache[convId]) { convCache[convId].lastSeen = now; convCache[convId].unread = 0; }
-  } else if (navigator.clearAppBadge) {
-    // Aproximación: al abrir cualquier chat, limpiamos el badge de este dispositivo.
-    // El próximo mensaje nuevo lo recalculará correctamente vía push.
-    navigator.clearAppBadge().catch(()=>{});
+  } else {
+    guestLastSeenMap[convId] = now;
+    recomputeGuestBadge();
+  }
+}
+
+// Badge del ícono para invitados: cuenta los no-leídos de SU 1:1 con Kiomi
+// más los del grupo familiar, en vivo, sin depender de las notificaciones push.
+let guestLastSeenMap = {};
+let guestBadgeMsgs = { own: [], family: [] };
+
+function attachGuestBadge() {
+  const ownId = fbKey(myName);
+  fbDb.ref('lastSeen/'+ownId).on('value', snap=>{
+    guestLastSeenMap = snap.val()||{};
+    recomputeGuestBadge();
+  });
+  fbDb.ref('conversations/'+ownId+'/messages').on('value', snap=>{
+    guestBadgeMsgs.own = Object.values(snap.val()||{});
+    recomputeGuestBadge();
+  });
+  fbDb.ref(FAMILY_PATH+'/messages').on('value', snap=>{
+    guestBadgeMsgs.family = Object.values(snap.val()||{});
+    recomputeGuestBadge();
+  });
+}
+
+function recomputeGuestBadge() {
+  const ownLastSeen = guestLastSeenMap[fbKey(myName)] || 0;
+  const famLastSeen = guestLastSeenMap['__family__'] || 0;
+  const unread = guestBadgeMsgs.own.filter(m=>m.from!==myName && m.ts>ownLastSeen).length
+               + guestBadgeMsgs.family.filter(m=>m.from!==myName && m.ts>famLastSeen).length;
+  if (navigator.setAppBadge) {
+    (unread>0 ? navigator.setAppBadge(unread) : navigator.clearAppBadge()).catch(()=>{});
   }
 }
 
@@ -1082,16 +1109,18 @@ function stopAlarmLocal() {
 
 // Pide permiso de notificaciones, registra el service worker y guarda el
 // token de este dispositivo en Firebase para que la Cloud Function le
-// pueda enviar avisos cuando llegue un mensaje nuevo.
-async function initPush() {
+// pueda enviar avisos cuando llegue un mensaje nuevo. En modo silencioso
+// no muestra alertas (se usa para pedir el permiso automáticamente, sin
+// que haga falta un botón).
+async function initPush(silent=false) {
   if (!('serviceWorker' in navigator) || !('Notification' in window) || !firebase.messaging) {
-    alert('Este navegador no soporta notificaciones push.');
+    if (!silent) alert('Este navegador no soporta notificaciones push.');
     return;
   }
   try {
     const reg  = await navigator.serviceWorker.register('firebase-messaging-sw.js');
     const perm = await Notification.requestPermission();
-    if (perm !== 'granted') { alert('No se activaron las notificaciones.'); return; }
+    if (perm !== 'granted') { if (!silent) alert('No se activaron las notificaciones.'); return; }
     const messaging = firebase.messaging();
     const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg });
     if (token && myName) await fbDb.ref('fcmTokens/'+fbKey(myName)+'/'+token).set(true);
@@ -1107,17 +1136,18 @@ async function initPush() {
       if (payload.data?.alarm==='1') triggerAlarm();
       else if (payload.data?.alarm==='stop') stopAlarmLocal();
     });
-    updateBellButtons();
   } catch(e) {
     console.warn('No se pudieron activar las notificaciones:', e);
-    alert('No se pudieron activar las notificaciones: '+e.message);
+    if (!silent) alert('No se pudieron activar las notificaciones: '+e.message);
   }
 }
 
-function updateBellButtons() {
-  const granted = ('Notification' in window) && Notification.permission==='granted';
-  if ($('g-bell-btn')) $('g-bell-btn').style.display = granted ? 'none' : '';
-  if ($('k-bell-btn')) $('k-bell-btn').style.display = granted ? 'none' : '';
+// Se llama al entrar al chat: si el navegador nunca preguntó (o ya se
+// concedió antes) intenta activar el push sin mostrar ningún botón ni
+// alerta. Si el usuario ya lo rechazó una vez, no vuelve a insistir.
+function silentlyInitPush() {
+  if (!('Notification' in window) || Notification.permission === 'denied') return;
+  initPush(true);
 }
 
 // ══════════════════════════════════════════

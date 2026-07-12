@@ -112,9 +112,11 @@ despliega la función. Si prefieres hacerlo a mano, sigue estos pasos:
    ```
 6. Sube los cambios (`index.html`, `firebase-messaging-sw.js`) a GitHub
    Pages como siempre.
-7. En cada celular, abre la app y toca el ícono 🔔 (aparece en el chat de
-   Kiomi y en el chat de cada invitado) para activar las notificaciones en
-   ese dispositivo. Hay que hacerlo una vez por dispositivo.
+7. En cada celular, la primera vez que alguien entra al chat la app pide
+   el permiso de notificaciones automáticamente (no hace falta tocar
+   ningún botón). Solo hay que aceptar el aviso del navegador. Si alguien
+   lo rechaza sin querer, tendrá que activarlo desde los ajustes de
+   notificaciones del navegador para ese sitio.
 
 **Nota sobre iPhone**: Apple solo permite notificaciones push a páginas
 web si están instaladas en la pantalla de inicio (no funciona en una
