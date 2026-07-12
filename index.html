@@ -169,10 +169,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .dot-wifi{background:#22c55e}
 .dot-cell{background:#f97316}
 .dot-off{background:#9ca3af}
-.presence-bar{padding:6px 12px;border-bottom:1px solid var(--border);
-  font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.presence-user{display:flex;align-items:center;gap:4px;
-  background:var(--bg);border-radius:10px;padding:2px 8px;font-size:11px}
+.presence-bar{padding:8px 12px;border-bottom:1px solid var(--border);
+  display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+.presence-item{display:flex;flex-direction:column;align-items:center;gap:3px;width:44px}
+.presence-item span{font-size:10px;color:var(--muted);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.presence-avatar{width:32px;height:32px;border-radius:50%;background:var(--grad);
+  color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;
+  font-weight:700;overflow:hidden;border:2.5px solid #eab308;box-sizing:content-box;
+  transition:border-color .2s}
+.presence-avatar.online{border-color:#22c55e}
+.presence-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover}
 
 /* ── WIFI BLOCK ── */
 .wifi-block{flex-direction:column;align-items:center;justify-content:center;
@@ -799,7 +806,7 @@ function logout() {
   localStorage.removeItem('kc_is_kiomi');
   myName=''; isKiomi=false; activeConv=null; convCache={};
   guestMode='kiomi'; guestListenerPath=null;
-  familyIncomingShown=false; familyCallDismissed=null;
+  familyIncomingShown=false; familyCallDismissed=null; familySeeded=false;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   show('s-who');
 }
@@ -817,6 +824,9 @@ async function resetAllChats() {
     await fbDb.ref('conversations').remove();
     await fbDb.ref('lastSeen').remove();
     await pushMessage(FAMILY_PATH, { ts: Date.now(), from: 'Kiomi', type: 'text', text: 'Bienvenidos al chat de Kiomi ❤️❤️❤️' }, 'Familia');
+    kiomiConvsData = {};
+    familySeeded = true; // ya se reseedea acá mismo; evita que el listener de 'conversations' dispare un segundo intento en paralelo
+    await seedFamilyConversations();
     alert('Listo — se borró todo el historial y se mandó el mensaje de bienvenida.');
   } catch(e) {
     alert('Error al borrar: '+e.message);
@@ -862,6 +872,23 @@ function readReceiptsHtml(m) {
     return `<span class="receipt-dot ${read?'read':'unread'}" title="${esc(name)}: ${read?'leído':'no leído'}"></span>`;
   }).join('');
   return `<div class="receipts">${dots}</div>`;
+}
+
+// A Kiomi le tienen que aparecer siempre los chats de los 4 integrantes de
+// la familia en su lista, así nunca hayan escrito — mismo principio que el
+// mensaje de bienvenida del chat familiar (resetAllChats): apenas Kiomi
+// entra, a quien todavía no tenga su conversación creada se le manda un
+// mensaje de bienvenida, así el chat queda visible desde el arranque.
+let familySeeded = false;
+async function seedFamilyConversations() {
+  for (const name of READ_RECEIPT_MEMBERS) {
+    if (kiomiConvsData[name]) continue;
+    try {
+      await pushMessage('conversations/'+fbKey(name),
+        { ts: Date.now(), from: 'Kiomi', type: 'text', text: `¡Hola ${name}! 👋 Este es tu chat con Kiomi 🌸` },
+        name);
+    } catch {}
+  }
 }
 
 function scrollToBottom(box) {
@@ -966,6 +993,7 @@ function enterKiomiChat() {
     // llegó con la app en segundo plano solo porque esa conversación había
     // quedado como la última abierta.
     if (activeConv && isAppVisible()) markSeen(activeConv);
+    if (!familySeeded) { familySeeded = true; seedFamilyConversations(); }
   });
   attachPresence();
   attachIncomingCallListener();
@@ -1914,12 +1942,6 @@ function getConnectionType() {
   return 'unknown';
 }
 
-function connIcon(conn) {
-  if (conn === 'wifi')     return '📶';
-  if (conn === 'cellular') return '📡';
-  return '❓';
-}
-
 function connBadgeHtml(conn) {
   if (conn === 'wifi')
     return `<span class="conn-badge conn-wifi"><span class="online-dot dot-wifi"></span>WiFi</span>`;
@@ -1949,14 +1971,22 @@ function attachPresence() {
   fbDb.ref('presence').on('value', snap => renderPresence(snap.val()||{}));
 }
 
+// Los 4 integrantes de la familia se muestran siempre en el encabezado de
+// Kiomi (no solo cuando están conectados), con el avatar enmarcado en
+// verde si están en línea ahora mismo o amarillo si no — como la lista de
+// amigos de un juego online, en vez de un signo de interrogación cuando el
+// navegador no sabe decir si es WiFi o datos.
 function renderPresence(users) {
   if (isKiomi) {
     const bar = $('k-presence-bar');
-    const online = Object.entries(users).filter(([n]) => n !== 'Kiomi');
-    if (!online.length) { bar.style.display = 'none'; return; }
     bar.style.display = 'flex';
-    bar.innerHTML = '<span style="font-size:11px;margin-right:4px">En línea:</span>' +
-      online.map(([n,v]) => `<span class="presence-user">${connIcon(v.conn)} ${esc(n)}</span>`).join('');
+    bar.innerHTML = READ_RECEIPT_MEMBERS.map(name => {
+      const online = !!users[name];
+      return `<div class="presence-item" title="${esc(name)} · ${online?'en línea':'sin conexión'}">
+        <div class="presence-avatar ${online?'online':''}">${avatarHtml(name)}</div>
+        <span>${esc(name)}</span>
+      </div>`;
+    }).join('');
   } else {
     const kiomiEntry = users['Kiomi'];
     const badge = $('g-conn-badge');
