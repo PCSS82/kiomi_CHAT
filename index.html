@@ -201,9 +201,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .attach-btn.recording{background:#dc2626;border-color:#dc2626;color:#fff;animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .audio-error{font-size:11px;color:#dc2626;padding:4px 4px 0;max-width:220px}
-.panic-btn{background:#dc2626;border:none;color:#fff;width:34px;height:34px;border-radius:50%;
-  cursor:pointer;font-size:16px;flex-shrink:0;animation:pulse 2s infinite}
-.panic-btn.panic-active{background:#374151;animation:pulse .8s infinite}
+.panic-btn{background:rgba(255,255,255,.15);border:none;color:#fff;width:34px;height:34px;border-radius:50%;
+  cursor:pointer;font-size:16px;flex-shrink:0}
+.panic-btn.panic-active{animation:panic-blink .7s infinite}
+@keyframes panic-blink{0%,100%{background:#dc2626}50%{background:#7f1d1d}}
 .panic-bubble{background:#dc2626;color:#fff;font-weight:700;padding:2px;border-radius:8px;
   text-align:center;animation:pulse 1.2s infinite}
 </style>
@@ -926,7 +927,10 @@ async function toggleFamilyRecording() {
     alert('No se pudo acceder al micrófono: '+e.message); return;
   }
   recordChunks = [];
-  const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/mp4']
+  // audio/mp4 primero: lo reproducen tanto iPhone como Android. webm/opus
+  // suena mejor y pesa menos, pero Safari/iOS no puede reproducirlo en
+  // absoluto — si un Android graba en webm, Kiomi nunca podría escucharlo.
+  const mimeType = ['audio/mp4','audio/mp4;codecs=mp4a.40.2','audio/webm;codecs=opus','audio/webm']
     .find(t => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
   mediaRecorder = mimeType ? new MediaRecorder(recordStream,{mimeType}) : new MediaRecorder(recordStream);
   mediaRecorder.ondataavailable = e => { if(e.data.size>0) recordChunks.push(e.data); };
@@ -1063,7 +1067,6 @@ function updatePanicButton() {
   const btn = document.querySelector('#s-kiomi-chat .panic-btn');
   if (!btn) return;
   const active = !!panicActiveFor[activeConv];
-  btn.textContent = active ? '🔕' : '🚨';
   btn.title = active ? 'Detener alarma' : 'Alerta de pánico';
   btn.classList.toggle('panic-active', active);
 }

@@ -1,7 +1,7 @@
 # ============================================================
 #  KIOMI CHAT - CONFIGURAR NOTIFICACIONES PUSH
-#  Ejecutar desde la carpeta raiz del repo (donde esta index.html):
-#  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+#  Correr donde sea (no hace falta ubicarse en ninguna carpeta antes):
+#  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 #  .\configurar_notificaciones.ps1
 #
 #  Antes de correr este script necesitas tener listos, desde la
@@ -22,14 +22,48 @@ Write-Host "   🔔  KIOMI CHAT  -  Notificaciones push" -ForegroundColor Magent
 Write-Host "  ============================================" -ForegroundColor Magenta
 Write-Host ""
 
-# ---------- 0. Verificar que estamos en la carpeta correcta ----------
-if (-not (Test-Path ".\index.html") -or -not (Test-Path ".\firebase-messaging-sw.js")) {
-    Write-Host "  ERROR: corre este script desde la carpeta raiz del repo kiomi_CHAT (donde esta index.html)." -ForegroundColor Red
-    exit 1
+# ---------- 0. Ubicar o descargar el repo ----------
+Write-Host "  [1/7] Buscando el repo de Kiomi Chat..." -ForegroundColor Cyan
+$repoFolder = Join-Path $env:USERPROFILE "kiomi_CHAT"
+
+if ((Test-Path ".\index.html") -and (Test-Path ".\firebase-messaging-sw.js")) {
+    Write-Host "       Ya estás dentro del repo: $(Get-Location)" -ForegroundColor Green
+} else {
+    if (Test-Path (Join-Path $repoFolder "index.html")) {
+        Write-Host "       Usando el repo ya descargado en $repoFolder" -ForegroundColor Green
+        if (Test-Path (Join-Path $repoFolder ".git")) {
+            Push-Location $repoFolder
+            git pull 2>$null
+            Pop-Location
+        }
+    } else {
+        Write-Host "       No encontré el repo, lo voy a descargar en $repoFolder..." -ForegroundColor Yellow
+        $gitInstalled = Get-Command git -ErrorAction SilentlyContinue
+        if (-not $gitInstalled) {
+            Write-Host "       Git no está instalado. Intentando instalarlo con winget..." -ForegroundColor Yellow
+            try {
+                winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
+                $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+            } catch {}
+            $gitInstalled = Get-Command git -ErrorAction SilentlyContinue
+        }
+        if (-not $gitInstalled) {
+            Write-Host "  ERROR: no se pudo instalar Git automáticamente. Instálalo desde https://git-scm.com/download/win, abre una NUEVA ventana de PowerShell y vuelve a correr este script." -ForegroundColor Red
+            exit 1
+        }
+        git clone https://github.com/PCSS82/kiomi_CHAT.git $repoFolder
+    }
+    Set-Location $repoFolder
 }
 
+if (-not (Test-Path ".\index.html") -or -not (Test-Path ".\firebase-messaging-sw.js")) {
+    Write-Host "  ERROR: no se pudo ubicar el repo correctamente en $(Get-Location)." -ForegroundColor Red
+    exit 1
+}
+Write-Host "       Carpeta de trabajo: $(Get-Location)" -ForegroundColor Green
+
 # ---------- 1. Verificar Node.js ----------
-Write-Host "  [1/6] Verificando Node.js..." -ForegroundColor Cyan
+Write-Host "  [2/7] Verificando Node.js..." -ForegroundColor Cyan
 try {
     $nodeVer = node --version
     Write-Host "       Node.js $nodeVer encontrado ✓" -ForegroundColor Green
@@ -38,30 +72,33 @@ try {
     exit 1
 }
 
-# ---------- 2. Instalar Firebase CLI ----------
+# ---------- 2. Firebase CLI ----------
+# Se usa "npx firebase-tools" en vez de instalar el paquete global y depender
+# de que "firebase" quede en el PATH (en Windows eso falla seguido y obliga
+# a cerrar y volver a abrir la terminal). npx lo descarga/cachea solo, sin
+# tocar el PATH del sistema.
 Write-Host ""
-Write-Host "  [2/6] Verificando Firebase CLI..." -ForegroundColor Cyan
-$fbInstalled = Get-Command firebase -ErrorAction SilentlyContinue
-if (-not $fbInstalled) {
-    Write-Host "       Instalando firebase-tools (npm install -g firebase-tools)..." -ForegroundColor Yellow
-    npm install -g firebase-tools
-} else {
-    Write-Host "       Firebase CLI ya esta instalada ✓" -ForegroundColor Green
+Write-Host "  [3/7] Preparando Firebase CLI (vía npx, sin instalación global)..." -ForegroundColor Cyan
+npx --yes firebase-tools --version
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  ERROR: no se pudo ejecutar firebase-tools con npx. Revisa tu conexión a internet e inténtalo de nuevo." -ForegroundColor Red
+    exit 1
 }
+Write-Host "       Firebase CLI lista ✓" -ForegroundColor Green
 
 # ---------- 3. Login y elegir proyecto ----------
 Write-Host ""
-Write-Host "  [3/6] Iniciando sesion en Firebase..." -ForegroundColor Cyan
+Write-Host "  [4/7] Iniciando sesion en Firebase..." -ForegroundColor Cyan
 Write-Host "       Se abrira tu navegador. Usa la cuenta de Google donde creaste el proyecto de Kiomi Chat." -ForegroundColor Gray
-firebase login
+npx firebase-tools login
 
 Write-Host ""
 Write-Host "  Elige tu proyecto de Firebase de la lista:" -ForegroundColor Cyan
-firebase use --add
+npx firebase-tools use --add
 
 # ---------- 4. Pedir clave VAPID y firebaseConfig ----------
 Write-Host ""
-Write-Host "  [4/6] Configuracion de notificaciones" -ForegroundColor Cyan
+Write-Host "  [5/7] Configuracion de notificaciones" -ForegroundColor Cyan
 Write-Host "       Si todavia no generaste tu clave VAPID: consola de Firebase ->" -ForegroundColor Gray
 Write-Host "       Configuracion del proyecto -> pestaña 'Cloud Messaging' ->" -ForegroundColor Gray
 Write-Host "       'Web Push certificates' -> 'Generar par de claves'." -ForegroundColor Gray
@@ -90,7 +127,7 @@ foreach ($field in @("apiKey", "databaseURL", "projectId", "messagingSenderId", 
 
 # ---------- 5. Escribir los archivos ----------
 Write-Host ""
-Write-Host "  [5/6] Actualizando archivos..." -ForegroundColor Cyan
+Write-Host "  [6/7] Actualizando archivos..." -ForegroundColor Cyan
 
 $indexContent = Get-Content ".\index.html" -Raw
 $indexContent = $indexContent.Replace("PEGAR_AQUI_TU_VAPID_KEY_DE_FIREBASE", $vapidKey)
@@ -116,11 +153,11 @@ Write-Host "       (revisa este archivo para confirmar que quedo bien escrito)" 
 
 # ---------- 6. Desplegar la funcion ----------
 Write-Host ""
-Write-Host "  [6/6] Desplegando la funcion de notificaciones..." -ForegroundColor Cyan
+Write-Host "  [7/7] Desplegando la funcion de notificaciones..." -ForegroundColor Cyan
 Push-Location functions
 npm install
 Pop-Location
-firebase deploy --only functions
+npx firebase-tools deploy --only functions
 
 Write-Host ""
 Write-Host "  ============================================" -ForegroundColor Green
@@ -131,6 +168,8 @@ Write-Host "  Revisa los cambios con 'git diff' y, si se ven bien, subelos:" -Fo
 Write-Host "    git add index.html firebase-messaging-sw.js" -ForegroundColor White
 Write-Host "    git commit -m 'chore: configurar notificaciones push'" -ForegroundColor White
 Write-Host "    git push" -ForegroundColor White
+Write-Host "  (si git push pide usuario/contraseña, necesitas iniciar sesion con tu" -ForegroundColor Gray
+Write-Host "   cuenta de GitHub o un token de acceso personal)" -ForegroundColor Gray
 Write-Host ""
-Write-Host "  Despues, en cada celular: abre la app y toca el icono 🔔 una vez" -ForegroundColor Cyan
-Write-Host "  para activar las notificaciones en ese dispositivo." -ForegroundColor Cyan
+Write-Host "  Despues, en cada celular basta con abrir la app: el permiso de" -ForegroundColor Cyan
+Write-Host "  notificaciones se pide automaticamente la primera vez." -ForegroundColor Cyan
