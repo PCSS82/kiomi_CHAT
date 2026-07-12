@@ -1717,13 +1717,20 @@ async function joinFamilyCall() {
   showGroupCallScreen();
   addLocalTile(localStream);
 
+  // Si calls/family quedó "active" pero sin nadie adentro (alguien se fue
+  // sin colgar -- cerró la app, se quedó sin señal, etc. -- onDisconnect
+  // solo borra su propio participante, no el active de arriba), no es una
+  // llamada real en curso: se trata como si no hubiera nada, para que quien
+  // llame ahora arranque una llamada nueva de verdad (con su tono de
+  // discado) en vez de "unirse" en silencio a una llamada fantasma.
   const existing = (await fbDb.ref('calls/family').once('value')).val();
-  if (existing && existing.active) {
+  const hasLiveParticipants = !!(existing && existing.participants && Object.keys(existing.participants).length);
+  if (existing && existing.active && hasLiveParticipants) {
     familyCallState.startedAt = existing.startedAt;
   } else {
     const startedAt = Date.now();
     familyCallState.startedAt = startedAt;
-    await fbDb.ref('calls/family').update({ active:true, startedBy:myName, startedAt });
+    await fbDb.ref('calls/family').set({ active:true, startedBy:myName, startedAt });
     // Nadie más estaba en la llamada todavía: es quien la está iniciando,
     // así que le suena el tono de "discado" (igual que en una llamada 1:1)
     // hasta que se una el primer familiar — antes no sonaba nada y parecía
