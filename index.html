@@ -180,6 +180,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   .chat-panel{width:100%}
   .chat-header .back-btn{display:block}
 }
+
+/* ── CHAT FAMILIAR (grupo) ── */
+.family-pin{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;
+  transition:background .15s;background:linear-gradient(135deg,rgba(124,58,237,.08),rgba(236,72,153,.08));
+  border-bottom:2px solid var(--border)}
+.family-pin:hover,.family-pin.active{background:var(--bg)}
+.family-tab-btn{background:rgba(255,255,255,.15);border:none;color:#fff;
+  border-radius:16px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;
+  white-space:nowrap;flex-shrink:0}
+.msg-sender{font-size:11px;font-weight:700;color:var(--pink);padding:0 4px}
+.bubble.media{padding:4px;background:var(--in-bg)}
+.msg-row.out .bubble.media{background:rgba(255,255,255,.2)}
+.msg-img{max-width:220px;max-height:280px;border-radius:12px;display:block;object-fit:cover;cursor:pointer}
+.msg-audio{width:230px;height:36px;display:block}
+.attach-btn{width:40px;height:40px;border-radius:50%;background:var(--input-bg);
+  border:2px solid var(--border);color:var(--muted);font-size:16px;cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center}
+.attach-btn.recording{background:#dc2626;border-color:#dc2626;color:#fff;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 </style>
 </head>
 <body>
@@ -281,16 +300,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 <div class="screen" id="s-guest-chat">
   <div class="chat-panel" style="display:flex;flex-direction:column;width:100%;height:100dvh">
     <div class="chat-header">
-      <img src="public/icons/kiomi_icon.png" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.4)"/>
+      <img id="g-avatar-img" src="public/icons/kiomi_icon.png" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.4)"/>
+      <div class="av" id="g-avatar-group" style="display:none">👨‍👩‍👧‍👦</div>
       <div class="info">
-        <div class="hname">Kiomi 🌸 <span id="g-conn-badge"></span></div>
+        <div class="hname"><span id="g-name-text">Kiomi 🌸</span> <span id="g-conn-badge"></span></div>
         <div class="hsub" id="g-status">Cargando…</div>
       </div>
+      <button class="family-tab-btn" id="g-family-btn" style="display:none" onclick="toggleGuestMode()">👨‍👩‍👧‍👦 Familia</button>
       <button class="logout-btn" onclick="logout()">⚙️</button>
     </div>
     <div class="messages" id="g-messages"></div>
     <div class="sync-bar" id="g-sync"></div>
     <div class="input-bar">
+      <input type="file" id="g-family-file" accept="image/*" style="display:none" onchange="familySendImage(this.files[0]); this.value=''"/>
+      <button class="attach-btn family-attach-btn" id="g-attach-btn" style="display:none" onclick="$('g-family-file').click()" title="Enviar imagen">📷</button>
+      <button class="attach-btn family-mic-btn" id="g-mic-btn" style="display:none" onclick="toggleFamilyRecording()" title="Grabar audio">🎤</button>
       <textarea id="g-input" placeholder="Escribe a Kiomi…" rows="1" maxlength="500"
         oninput="autoResize(this)"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();guestSend()}"></textarea>
@@ -342,6 +366,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <div class="messages" id="k-messages"></div>
         <div class="sync-bar" id="k-sync"></div>
         <div class="input-bar">
+          <input type="file" id="k-family-file" accept="image/*" style="display:none" onchange="familySendImage(this.files[0]); this.value=''"/>
+          <button class="attach-btn family-attach-btn" id="k-attach-btn" style="display:none" onclick="$('k-family-file').click()" title="Enviar imagen">📷</button>
+          <button class="attach-btn family-mic-btn" id="k-mic-btn" style="display:none" onclick="toggleFamilyRecording()" title="Grabar audio">🎤</button>
           <textarea id="k-input" placeholder="Responder…" rows="1" maxlength="500"
             oninput="autoResize(this)"
             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();kiomiSend()}"></textarea>
@@ -361,6 +388,9 @@ const REPO   = 'kiomi_CHAT';
 const BRANCH = 'main';
 const KIOMI_PIN_KEY = 'kc_kiomi_pin'; // hash del PIN de Kiomi
 const DEFAULT_PIN   = 'kiomi2024';    // PIN por defecto (cambiar en settings)
+const FAMILY_PATH   = 'conversations/__family__'; // chat grupal: Kiomi, Koji, Ami, Mamá, Papá
+const FAMILY_MEMBERS= ['kiomi','koji','ami','mama','papa'];
+const MAX_RECORD_MS = 60000; // tope de duración de audio (60s) para no crecer demasiado en la BD
 
 // ══════════════════════════════════════════
 //  ESTADO
@@ -368,14 +398,24 @@ const DEFAULT_PIN   = 'kiomi2024';    // PIN por defecto (cambiar en settings)
 let token     = '';   // token de GitHub, solo para respaldo CSV (opcional)
 let myName    = '';
 let isKiomi   = false;
-let activeConv= null;   // nombre del guest activo (en vista Kiomi)
+let activeConv= null;   // nombre del guest activo (en vista Kiomi); '__family__' = grupo familiar
 let convCache = {};     // { guestName: { messages, lastSeen, unread } }
 let sending   = false;
 let fbApp = null, fbDb = null;
 let presenceTimer = null;
+let guestMode = 'kiomi';        // 'kiomi' | 'family' — a quién le habla el guest ahora
+let guestListenerPath = null;   // ref actualmente escuchado en la vista guest
+let mediaRecorder=null, recordChunks=[], recordTimer=null, recordStartTs=0, recordStream=null;
 
 function fbKey(name) {
   return String(name).replace(/[.#$\[\]\/]/g, '_');
+}
+
+function normName(s) {
+  return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+}
+function isFamilyMember(name) {
+  return FAMILY_MEMBERS.includes(normName(name));
 }
 
 function initFirebase() {
@@ -463,6 +503,13 @@ async function appendCsv(guestName, msg) {
   await ghPut(path, content+line, sha, `csv ${today}`);
 }
 
+// Empuja un mensaje (texto/imagen/audio) a una ruta de conversación y respalda en CSV
+async function pushMessage(path, msg, csvLabel) {
+  await fbDb.ref(path+'/messages').push(msg);
+  const csvMsg = msg.text!=null ? msg : {...msg, text:`[${msg.type}]`};
+  appendCsv(csvLabel, csvMsg).catch(()=>{});
+}
+
 // ══════════════════════════════════════════
 //  BOOT
 // ══════════════════════════════════════════
@@ -523,6 +570,7 @@ function enterGuest() {
   if(!n||n.length<2){ $('err-guest').textContent='Escribe al menos 2 letras'; return; }
   if(n.toLowerCase()==='kiomi'){ $('err-guest').textContent='Ese nombre es de Kiomi 😊 elige otro'; return; }
   if(/[.#$\[\]\/]/.test(n)){ $('err-guest').textContent='Evita los símbolos . # $ [ ] /'; return; }
+  if(fbKey(n)==='__family__'){ $('err-guest').textContent='Ese nombre no está disponible'; return; }
   quickEnter(n);
 }
 
@@ -539,19 +587,46 @@ function enterKiomi() {
 
 function logout() {
   if(!confirm('¿Salir del chat?')) return;
+  stopFamilyRecording();
   if(fbDb){
     if(myName) fbDb.ref('presence/'+fbKey(myName)).remove();
     fbDb.ref('conversations').off();
     fbDb.ref('presence').off();
-    if(myName) fbDb.ref('conversations/'+fbKey(myName)+'/messages').off();
+    if(guestListenerPath) fbDb.ref(guestListenerPath).off();
     fbDb.ref('.info/connected').off();
   }
   clearInterval(presenceTimer);
   localStorage.removeItem('kc_name');
   localStorage.removeItem('kc_is_kiomi');
   myName=''; isKiomi=false; activeConv=null; convCache={};
+  guestMode='kiomi'; guestListenerPath=null;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   show('s-who');
+}
+
+// ══════════════════════════════════════════
+//  RENDER DE MENSAJES (compartido guest/Kiomi/familia)
+// ══════════════════════════════════════════
+function renderMessages(box, messages, {showSender=false, emptyHtml=''}={}) {
+  if(!messages.length){ box.innerHTML=emptyHtml; return; }
+  let html='', lastDate=null;
+  messages.forEach(m=>{
+    const d=fmtDate(m.ts);
+    if(d!==lastDate){ html+=`<div class="date-chip">${esc(d)}</div>`; lastDate=d; }
+    const isMe = m.from===myName;
+    const isMedia = m.type==='image'||m.type==='audio';
+    let inner;
+    if(m.type==='image') inner=`<img class="msg-img" src="${m.data}" alt="imagen" onclick="window.open(this.src,'_blank')"/>`;
+    else if(m.type==='audio') inner=`<audio class="msg-audio" controls src="${m.data}"></audio>`;
+    else inner=esc(m.text);
+    html+=`<div class="msg-row ${isMe?'out':'in'}">
+      ${showSender&&!isMe?`<div class="msg-sender">${esc(m.from)}</div>`:''}
+      <div class="bubble${isMedia?' media':''}">${inner}</div>
+      <div class="msg-time">${fmtTime(m.ts)}</div>
+    </div>`;
+  });
+  box.innerHTML=html;
+  box.scrollTop=box.scrollHeight;
 }
 
 // ══════════════════════════════════════════
@@ -560,33 +635,42 @@ function logout() {
 function enterGuestChat() {
   show('s-guest-chat');
   attachConnectionStatus('g-sync');
-  fbDb.ref('conversations/'+fbKey(myName)+'/messages').on('value', snap=>{
-    const val = snap.val()||{};
-    const messages = Object.values(val).sort((a,b)=>a.ts-b.ts);
-    convCache[myName] = { messages };
-    renderGuestMessages(messages);
-  });
+  $('g-family-btn').style.display = isFamilyMember(myName) ? '' : 'none';
+  switchGuestMode('kiomi');
   attachPresence();
 }
 
-function renderGuestMessages(messages) {
-  const box = $('g-messages');
-  if(!messages.length){
-    box.innerHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);margin-top:40px"><div style="font-size:48px">🌸</div><p style="font-size:14px">Escríbele a Kiomi para empezar</p></div>';
-    return;
-  }
-  let html='', lastDate=null;
-  messages.forEach(m=>{
-    const d=fmtDate(m.ts);
-    if(d!==lastDate){ html+=`<div class="date-chip">${esc(d)}</div>`; lastDate=d; }
-    const isMe = m.from!=='Kiomi';
-    html+=`<div class="msg-row ${isMe?'out':'in'}">
-      <div class="bubble">${esc(m.text)}</div>
-      <div class="msg-time">${fmtTime(m.ts)}</div>
-    </div>`;
+// Cambia la vista guest entre el 1:1 con Kiomi y el grupo familiar
+function switchGuestMode(mode) {
+  guestMode = mode;
+  if(guestListenerPath) fbDb.ref(guestListenerPath).off();
+  guestListenerPath = mode==='family' ? FAMILY_PATH+'/messages' : 'conversations/'+fbKey(myName)+'/messages';
+  fbDb.ref(guestListenerPath).on('value', snap=>{
+    const val = snap.val()||{};
+    const messages = Object.values(val).sort((a,b)=>a.ts-b.ts);
+    if(mode==='kiomi') convCache[myName] = { messages };
+    renderGuestMessages(messages);
   });
-  box.innerHTML=html;
-  box.scrollTop=box.scrollHeight;
+  $('g-name-text').textContent = mode==='family' ? 'Familia' : 'Kiomi 🌸';
+  $('g-family-btn').textContent = mode==='family' ? '💬 Kiomi' : '👨‍👩‍👧‍👦 Familia';
+  $('g-avatar-img').style.display = mode==='family' ? 'none' : '';
+  $('g-avatar-group').style.display = mode==='family' ? 'flex' : 'none';
+  $('g-conn-badge').style.display = mode==='family' ? 'none' : '';
+  $('g-status').textContent = mode==='family' ? 'Chat familiar' : 'Cargando…';
+  $('g-attach-btn').style.display = mode==='family' ? 'flex' : 'none';
+  $('g-mic-btn').style.display = mode==='family' ? 'flex' : 'none';
+  $('g-input').placeholder = mode==='family' ? 'Escribe a la familia…' : 'Escribe a Kiomi…';
+}
+
+function toggleGuestMode() {
+  switchGuestMode(guestMode==='family' ? 'kiomi' : 'family');
+}
+
+function renderGuestMessages(messages) {
+  const empty = guestMode==='family'
+    ? '<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);margin-top:40px"><div style="font-size:48px">👨‍👩‍👧‍👦</div><p style="font-size:14px">Sé el primero en escribir en el chat familiar</p></div>'
+    : '<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);margin-top:40px"><div style="font-size:48px">🌸</div><p style="font-size:14px">Escríbele a Kiomi para empezar</p></div>';
+  renderMessages($('g-messages'), messages, { showSender: guestMode==='family', emptyHtml: empty });
 }
 
 async function guestSend() {
@@ -594,10 +678,10 @@ async function guestSend() {
   if(!txt||sending) return;
   sending=true; $('g-send-btn').disabled=true;
   try {
-    const msg = { ts:Date.now(), from:myName, text:txt };
-    await fbDb.ref('conversations/'+fbKey(myName)+'/messages').push(msg);
+    const msg = { ts:Date.now(), from:myName, type:'text', text:txt };
+    const path = guestMode==='family' ? FAMILY_PATH : 'conversations/'+fbKey(myName);
+    await pushMessage(path, msg, guestMode==='family'?'Familia':myName);
     ta.value=''; ta.style.height='auto';
-    appendCsv(myName, msg).catch(()=>{});
   } catch(e) {
     alert('Error al enviar: '+e.message);
   } finally {
@@ -644,12 +728,7 @@ function enterKiomiChat() {
 function renderConvList() {
   const list = $('k-conv-list');
   const q    = ($('k-search').value||'').toLowerCase();
-  const names= allConvNames.filter(n=>!q||n.toLowerCase().includes(q));
-
-  if(!names.length){
-    list.innerHTML='<div class="sidebar-empty"><div style="font-size:40px">💬</div><p>Nadie ha escrito aún</p></div>';
-    return;
-  }
+  const names= allConvNames.filter(n=>n!=='__family__' && (!q||n.toLowerCase().includes(q)));
 
   // Ordenar por último mensaje
   names.sort((a,b)=>{
@@ -660,7 +739,29 @@ function renderConvList() {
     return tb-ta;
   });
 
-  list.innerHTML = names.map(name=>{
+  const fc      = convCache['__family__']||{};
+  const fMsgs   = fc.messages||[];
+  const fLast   = fMsgs[fMsgs.length-1];
+  const fUnread = fc.unread||0;
+  const fPreview = fLast ? (fLast.type==='image'?'📷 Imagen':fLast.type==='audio'?'🎤 Audio':esc(fLast.text)) : 'Sin mensajes';
+  const famHtml = `<div class="family-pin${activeConv==='__family__'?' active':''}" onclick="openConv('__family__')">
+    <div class="conv-avatar">👨‍👩‍👧‍👦</div>
+    <div class="conv-info">
+      <div class="conv-name">Familia</div>
+      <div class="conv-preview">${fPreview}</div>
+    </div>
+    <div class="conv-meta">
+      ${fLast?`<div class="conv-time">${fmtTime(fLast.ts)}</div>`:''}
+      ${fUnread>0?`<div class="conv-unread">${fUnread}</div>`:''}
+    </div>
+  </div>`;
+
+  if(!names.length){
+    list.innerHTML = famHtml + '<div class="sidebar-empty"><div style="font-size:40px">💬</div><p>Nadie ha escrito aún</p></div>';
+    return;
+  }
+
+  list.innerHTML = famHtml + names.map(name=>{
     const c    = convCache[name]||{};
     const msgs = c.messages||[];
     const last = msgs[msgs.length-1];
@@ -689,11 +790,14 @@ function openConv(name) {
     c.unread   = 0;
     localStorage.setItem('kc_seen_'+name, c.lastSeen);
   }
-  $('k-chat-avatar').textContent = avatarLetter(name);
-  $('k-chat-name').textContent   = name;
+  const isFam = name==='__family__';
+  $('k-chat-avatar').textContent = isFam ? '👨‍👩‍👧‍👦' : avatarLetter(name);
+  $('k-chat-name').textContent   = isFam ? 'Familia' : name;
   $('k-chat-sub').textContent    = (c.messages||[]).length + ' mensajes';
   $('k-no-chat').style.display   = 'none';
   $('k-active').style.display    = 'flex';
+  $('k-attach-btn').style.display = isFam ? 'flex' : 'none';
+  $('k-mic-btn').style.display    = isFam ? 'flex' : 'none';
   renderKiomiMessages(c.messages||[]);
   renderConvList();
   // Mobile: esconder sidebar
@@ -709,23 +813,10 @@ function closeMobileChat() {
 }
 
 function renderKiomiMessages(messages) {
-  const box = $('k-messages');
-  if(!messages.length){
-    box.innerHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px">Sin mensajes aún</div>';
-    return;
-  }
-  let html='', lastDate=null;
-  messages.forEach(m=>{
-    const d=fmtDate(m.ts);
-    if(d!==lastDate){ html+=`<div class="date-chip">${esc(d)}</div>`; lastDate=d; }
-    const isKiomiMsg = m.from==='Kiomi';
-    html+=`<div class="msg-row ${isKiomiMsg?'out':'in'}">
-      <div class="bubble">${esc(m.text)}</div>
-      <div class="msg-time">${fmtTime(m.ts)}</div>
-    </div>`;
+  renderMessages($('k-messages'), messages, {
+    showSender: activeConv==='__family__',
+    emptyHtml: '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px">Sin mensajes aún</div>'
   });
-  box.innerHTML=html;
-  box.scrollTop=box.scrollHeight;
 }
 
 async function kiomiSend() {
@@ -733,14 +824,106 @@ async function kiomiSend() {
   if(!txt||sending||!activeConv) return;
   sending=true; $('k-send-btn').disabled=true;
   try {
-    const msg = { ts:Date.now(), from:'Kiomi', text:txt };
-    await fbDb.ref('conversations/'+fbKey(activeConv)+'/messages').push(msg);
+    const msg  = { ts:Date.now(), from:'Kiomi', type:'text', text:txt };
+    const path = activeConv==='__family__' ? FAMILY_PATH : 'conversations/'+fbKey(activeConv);
+    await pushMessage(path, msg, activeConv==='__family__'?'Familia':activeConv);
     ta.value=''; ta.style.height='auto';
-    appendCsv(activeConv, msg).catch(()=>{});
   } catch(e) {
     alert('Error: '+e.message);
   } finally {
     sending=false; $('k-send-btn').disabled=false;
+  }
+}
+
+// ══════════════════════════════════════════
+//  CHAT FAMILIAR — imágenes comprimidas y audios
+// ══════════════════════════════════════════
+
+// Comprime una imagen a JPEG antes de guardarla como base64 en la BD
+function compressImage(file, maxDim=1000, quality=0.6) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width*scale); height = Math.round(height*scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen')); };
+    img.src = url;
+  });
+}
+
+async function familySendImage(file) {
+  if(!file || sending) return;
+  sending = true;
+  try {
+    const dataUrl = await compressImage(file);
+    const msg = { ts:Date.now(), from:myName, type:'image', data:dataUrl, mime:'image/jpeg' };
+    await pushMessage(FAMILY_PATH, msg, 'Familia');
+  } catch(e) {
+    alert('Error al enviar imagen: '+e.message);
+  } finally {
+    sending = false;
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload  = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
+async function toggleFamilyRecording() {
+  if (mediaRecorder && mediaRecorder.state==='recording') { stopFamilyRecording(); return; }
+  try {
+    recordStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+  } catch(e) {
+    alert('No se pudo acceder al micrófono: '+e.message); return;
+  }
+  recordChunks = [];
+  const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/mp4']
+    .find(t => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+  mediaRecorder = mimeType ? new MediaRecorder(recordStream,{mimeType}) : new MediaRecorder(recordStream);
+  mediaRecorder.ondataavailable = e => { if(e.data.size>0) recordChunks.push(e.data); };
+  mediaRecorder.onstop = onFamilyRecordingStop;
+  mediaRecorder.start();
+  recordStartTs = Date.now();
+  document.querySelectorAll('.family-mic-btn').forEach(b=>b.classList.add('recording'));
+  recordTimer = setTimeout(()=>stopFamilyRecording(), MAX_RECORD_MS);
+}
+
+function stopFamilyRecording() {
+  clearTimeout(recordTimer);
+  document.querySelectorAll('.family-mic-btn').forEach(b=>b.classList.remove('recording'));
+  if (mediaRecorder && mediaRecorder.state==='recording') mediaRecorder.stop();
+  if (recordStream) { recordStream.getTracks().forEach(t=>t.stop()); recordStream=null; }
+}
+
+async function onFamilyRecordingStop() {
+  const durMs = Date.now()-recordStartTs;
+  const blob  = new Blob(recordChunks, { type: mediaRecorder.mimeType||'audio/webm' });
+  recordChunks = [];
+  if (durMs < 500 || !blob.size || sending) return; // grabación muy corta o vacía
+  sending = true;
+  try {
+    const dataUrl = await blobToDataUrl(blob);
+    const msg = { ts:Date.now(), from:myName, type:'audio', data:dataUrl, mime:blob.type, dur:Math.round(durMs/1000) };
+    await pushMessage(FAMILY_PATH, msg, 'Familia');
+  } catch(e) {
+    alert('Error al enviar audio: '+e.message);
+  } finally {
+    sending = false;
   }
 }
 
