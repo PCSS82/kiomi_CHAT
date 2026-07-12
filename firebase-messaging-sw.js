@@ -17,19 +17,25 @@ const messaging = firebase.messaging();
 
 // Se dispara cuando llega una notificación y la app/pestaña NO está en primer plano
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || 'Kiomi Chat';
-  const body  = payload.notification?.body  || '';
-  const badge = payload.data?.badge;
+  const title  = payload.notification?.title || 'Kiomi Chat';
+  const body   = payload.notification?.body  || '';
+  const badge  = payload.data?.badge;
+  const isAlarm = payload.data?.alarm === '1';
 
   if (badge != null && self.setAppBadge) {
     self.setAppBadge(Number(badge)).catch(() => {});
   }
 
+  // La alarma sonora solo puede reproducirse con la app abierta (los service
+  // workers no pueden reproducir audio). Con la app cerrada, en Android esta
+  // notificación sí vibra; en iPhone no (Safari no soporta vibrar desde la web).
   self.registration.showNotification(title, {
     body,
     icon: 'public/icons/kiomi_icon.png',
     badge: 'public/icons/kiomi_icon.png',
-    tag: 'kiomi-chat-msg',
+    tag: isAlarm ? undefined : 'kiomi-chat-msg',
+    requireInteraction: isAlarm,
+    vibrate: isAlarm ? [400, 200, 400, 200, 400, 200, 400] : undefined,
   });
 });
 
