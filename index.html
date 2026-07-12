@@ -563,6 +563,25 @@ if (window.visualViewport) {
   applyAppHeight();
 }
 
+// Los navegadores (sobre todo Safari/iPhone) no dejan que un <audio> suene
+// por código si nunca hubo un toque directo del usuario en la página —
+// igual que un juego, que "desbloquea" sus sonidos con el primer toque en
+// vez de esperar a necesitarlos de verdad. Sin esto, el timbre de una
+// llamada entrante (que arranca solo, disparado por Firebase, sin que la
+// persona haya tocado nada en ese momento) puede quedar mudo la primera
+// vez, aunque el resto del código esté bien.
+let audioUnlocked = false;
+function unlockAudioOnce() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  [$('ringtone-audio'), $('ringback-audio')].forEach(audio => {
+    if (!audio) return;
+    audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(() => {});
+  });
+}
+document.addEventListener('pointerdown', unlockAudioOnce, { once: true });
+document.addEventListener('keydown', unlockAudioOnce, { once: true });
+
 function isAppVisible() {
   return document.visibilityState === 'visible';
 }

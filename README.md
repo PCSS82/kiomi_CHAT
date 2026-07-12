@@ -143,6 +143,15 @@ llamada (sonando o en curso) se pone **verde** y parpadea. Al llamar:
   un "brrr… brrr…" clásico) mientras espera que el otro lado conteste —
   distinto del timbre de llamada entrante, para que se note la diferencia
   entre "estoy llamando" y "me están llamando".
+- **Desbloqueo de audio al estilo videojuego**: los navegadores (sobre todo
+  Safari/iPhone) no dejan sonar un `<audio>` por código si la persona nunca
+  tocó nada en la página todavía — igual que un juego, que "desbloquea" sus
+  sonidos con el primer toque en la pantalla en vez de esperar a
+  necesitarlos. La app hace lo mismo: apenas se toca cualquier parte de la
+  pantalla por primera vez, reproduce (y pausa al instante) el timbre y el
+  tono de discado una vez, para que después —cuando de verdad suene una
+  llamada entrante disparada sola por Firebase, sin que nadie haya tocado
+  nada en ese momento— el sonido salga sin problema.
 - Con la app cerrada, llega como notificación push para avisar que hay
   una llamada — al tocarla se abre la app.
 - Requiere la misma configuración de notificaciones push descrita arriba
