@@ -20,23 +20,24 @@ messaging.onBackgroundMessage((payload) => {
   const title  = payload.notification?.title || 'Kiomi Chat';
   const body   = payload.notification?.body  || '';
   const badge  = payload.data?.badge;
-  const isAlarm = payload.data?.alarm === '1';
+  const isCall = payload.data?.type === 'call';
 
   // La Badging API vive en self.navigator, no directamente en self.
   if (badge != null && self.navigator && self.navigator.setAppBadge) {
     self.navigator.setAppBadge(Number(badge)).catch(() => {});
   }
 
-  // La alarma sonora solo puede reproducirse con la app abierta (los service
-  // workers no pueden reproducir audio). Con la app cerrada, en Android esta
-  // notificación sí vibra; en iPhone no (Safari no soporta vibrar desde la web).
+  // El timbre/vibración de la llamada solo puede sonar con la app abierta
+  // (los service workers no pueden reproducir audio). Con la app cerrada,
+  // en Android esta notificación sí vibra; en iPhone no (Safari no soporta
+  // vibrar desde la web) — pero igual aparece la notificación para abrir la app.
   self.registration.showNotification(title, {
     body,
     icon: 'public/icons/kiomi_icon.png',
     badge: 'public/icons/kiomi_icon.png',
-    tag: isAlarm ? undefined : 'kiomi-chat-msg',
-    requireInteraction: isAlarm,
-    vibrate: isAlarm ? [400, 200, 400, 200, 400, 200, 400] : undefined,
+    tag: isCall ? undefined : 'kiomi-chat-msg',
+    requireInteraction: isCall,
+    vibrate: isCall ? [500, 300, 500, 300, 500, 300, 500] : undefined,
   });
 });
 

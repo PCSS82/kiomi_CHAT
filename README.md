@@ -122,19 +122,28 @@ despliega la función. Si prefieres hacerlo a mano, sigue estos pasos:
 web si están instaladas en la pantalla de inicio (no funciona en una
 pestaña normal de Safari) y requiere iOS 16.4 o superior.
 
-## Botón de pánico (solo Kiomi)
+## Llamadas de video (ícono 📹, solo chats 1:1)
 
-Kiomi tiene un botón 🚨 en la parte superior de cada chat (individual o
-familiar). Al tocarlo, pide confirmación y envía una alerta al chat activo:
+Cualquier invitado y Kiomi pueden llamarse por video entre ellos con el
+ícono 📹 del header (no está disponible en el chat familiar — las llamadas
+son siempre entre dos personas). Al llamar:
 
-- El celular que la recibe **vibra** (funciona en Android; en iPhone no es
-  posible vibrar desde una página web, es una limitación de Apple) y
-  **suena una sirena** mientras la app esté abierta.
-- Con la app cerrada, llega como una notificación push normal marcada como
-  urgente — usa el mismo sonido de notificación del sistema (los
-  navegadores no permiten reproducir un sonido personalizado si la app
-  está cerrada).
-- Requiere la misma configuración de notificaciones push descrita arriba.
+- El otro lado ve una pantalla de llamada entrante con opción de
+  contestar o rechazar, y suena un timbre + vibra (Android; en iPhone no
+  es posible vibrar desde una web) mientras la app esté abierta.
+- Con la app cerrada, llega como notificación push para avisar que hay
+  una llamada — al tocarla se abre la app.
+- Requiere la misma configuración de notificaciones push descrita arriba
+  para que avise con la app cerrada.
+- Queda un registro tipo "📹 Llamada de video · 2:15" (o "perdida",
+  "rechazada", "cancelada") en el chat, como en WhatsApp.
+
+**Importante — límite técnico real**: la conexión de video usa solo un
+servidor STUN gratuito de Google (sin servidor TURN, que tiene costo). Esto
+funciona bien cuando ambos están en la misma WiFi o en muchas redes
+móviles, pero en algunas combinaciones de red (datos móviles restrictivos
+de los dos lados, por ejemplo) la llamada puede no lograr conectar. Si eso
+pasa seguido, se puede agregar un servidor TURN más adelante.
 
 ## Si el audio no se reproduce en un iPhone
 
