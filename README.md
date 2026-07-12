@@ -187,6 +187,59 @@ falta ese nivel de "suena como llamada de verdad", la única forma real es
 convertir la app en una app nativa (con Capacitor/React Native, por
 ejemplo) y publicarla en las tiendas — es un proyecto bastante más grande.
 
+### Llamada telefónica de respaldo (opcional, con Twilio)
+
+Como esta app reemplaza al botón de pánico, y una notificación push puede
+fallar (celular sin datos, permiso de notificación rechazado, app
+desinstalada), se puede agregar una **llamada telefónica real** de
+respaldo: cuando alguien llama por video (a Kiomi, a un invitado, o a todo
+el grupo familiar), además de la notificación push, cada destinatario
+recibe una **llamada de teléfono de verdad** que dice "Fulano te está
+llamando en la aplicación de Kiomi Chat, por favor abrí la app para
+contestar". Como usa la red del operador (no internet ni el navegador),
+suena igual con el celular bloqueado, sin wifi/datos, o con la app
+totalmente cerrada — es la opción más confiable que existe sin convertir
+la app en una app nativa.
+
+Esto es **opcional y tiene un costo pequeño** (por minuto de llamada, más
+un alquiler mensual del número de teléfono que hace la llamada — anotá que
+Twilio da algo de crédito gratis para probar, y después es de pago por
+uso). Si no se configura, el resto de la app sigue funcionando exactamente
+igual, sin errores.
+
+**Configuración** (una sola vez):
+
+1. Creá una cuenta gratis en [twilio.com](https://www.twilio.com/try-twilio).
+2. En el panel de Twilio, comprá un **número de teléfono con capacidad de
+   voz** (Phone Numbers → Buy a number) — cualquiera con "Voice" habilitado
+   sirve, no hace falta que sea de tu país.
+3. Copiá tu **Account SID** y tu **Auth Token** de la página principal del
+   panel de Twilio (Account → API keys & tokens).
+4. Desde la carpeta del repo en tu computadora, guardá las 3 credenciales
+   como secretos de Firebase (te va a pedir que pegues cada valor):
+   ```bash
+   npx firebase-tools functions:secrets:set TWILIO_ACCOUNT_SID
+   npx firebase-tools functions:secrets:set TWILIO_AUTH_TOKEN
+   npx firebase-tools functions:secrets:set TWILIO_FROM_NUMBER
+   ```
+   Para `TWILIO_FROM_NUMBER` pegá el número que compraste en el paso 2, en
+   formato internacional (ej: `+18885551234`).
+5. Volvé a desplegar las funciones para que tomen los secretos nuevos:
+   ```bash
+   npx firebase-tools deploy --only functions
+   ```
+6. Abrí la app como Kiomi, tocá el ícono ☎️ arriba a la izquierda del panel
+   de conversaciones, y cargá el número de teléfono de cada miembro de la
+   familia en formato internacional (ej: `+51987654321` — el `+` y el
+   código de país son obligatorios). Se puede dejar vacío el de quien no
+   quiera esta función.
+
+**Cuenta de prueba (trial) de Twilio**: mientras no le agregues una tarjeta
+a la cuenta de Twilio, solo puede llamar a números que verifiques primero
+uno por uno desde el panel de Twilio (Verified Caller IDs) — para que
+llame a cualquier número sin verificar antes hace falta pasar la cuenta a
+modo pago (cargar saldo).
+
 ## Indicadores de lectura en el chat familiar
 
 Cada mensaje del chat familiar muestra 4 puntitos (Koji, Ami, Mamá, Papá):

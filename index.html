@@ -73,6 +73,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .sidebar-header .hname{font-weight:700;font-size:15px;flex:1}
 .sidebar-header .badge{background:#ec4899;color:#fff;border-radius:10px;
   font-size:11px;font-weight:700;padding:2px 7px}
+.settings-btn{background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;
+  border-radius:50%;cursor:pointer;font-size:15px;flex-shrink:0}
 .sidebar-search{padding:10px 12px;border-bottom:1px solid var(--border)}
 .sidebar-search input{width:100%;padding:8px 12px;border:1.5px solid var(--border);
   border-radius:10px;font-size:14px;background:var(--input-bg);color:var(--text);outline:none}
@@ -402,6 +404,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <img src="public/icons/kiomi_icon.png" alt="Kiomi"/>
         <span class="hname">Kiomi Chat</span>
         <span class="badge" id="k-unread-total" style="display:none">0</span>
+        <button class="settings-btn" onclick="openPhoneSettings()" title="Números de teléfono">☎️</button>
       </div>
       <div class="presence-bar" id="k-presence-bar" style="display:none"></div>
       <div class="sidebar-search">
@@ -445,6 +448,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       </div>
     </div>
   </div>
+</div>
+
+<!-- ══ NÚMEROS DE TELÉFONO (llamada de respaldo por Twilio) ══ -->
+<div class="screen setup" id="s-phone-settings">
+  <img class="kiomi-avatar" src="public/icons/kiomi_icon.png" alt="Kiomi"/>
+  <h1>Números de teléfono</h1>
+  <p>Para la llamada telefónica de respaldo cuando alguien llama por video
+    (suena el celular de verdad, aunque la app esté cerrada). Formato
+    internacional, por ejemplo <b>+51987654321</b>. Dejá vacío el de
+    alguien que no quiera esta función.</p>
+  <div id="phone-fields" style="width:100%;max-width:340px;display:flex;flex-direction:column;gap:10px"></div>
+  <p class="err" id="err-phone-settings"></p>
+  <button class="btn" onclick="savePhoneNumbers()">Guardar</button>
+  <button class="btn-sec" onclick="closePhoneSettings()">← Volver</button>
 </div>
 
 <!-- ══ LLAMADA DE VIDEO ══ -->
@@ -1023,6 +1040,49 @@ function closeMobileChat() {
   $('k-active').style.display='none';
   $('k-no-chat').style.display='';
   activeConv=null;
+}
+
+// ══════════════════════════════════════════
+//  NÚMEROS DE TELÉFONO (llamada de respaldo por Twilio, ver README)
+// ══════════════════════════════════════════
+const PHONE_SETTINGS_MEMBERS = ['Kiomi', ...READ_RECEIPT_MEMBERS];
+
+async function openPhoneSettings() {
+  const snap = await fbDb.ref('phoneNumbers').once('value');
+  const saved = snap.val() || {};
+  $('phone-fields').innerHTML = PHONE_SETTINGS_MEMBERS.map(name => `
+    <label style="text-align:left;font-size:13px;font-weight:600;color:var(--muted)">
+      ${esc(name)}
+      <input type="tel" id="phone-${fbKey(name)}" value="${esc(saved[fbKey(name)]||'')}"
+        placeholder="+51987654321" autocomplete="off"
+        style="width:100%;margin-top:4px;padding:12px 14px;border:2px solid var(--border);
+        border-radius:12px;font-size:15px;background:var(--card);color:var(--text);outline:none"/>
+    </label>
+  `).join('');
+  $('err-phone-settings').textContent = '';
+  show('s-phone-settings');
+}
+
+function closePhoneSettings() {
+  show('s-kiomi-chat');
+}
+
+async function savePhoneNumbers() {
+  const updates = {};
+  for (const name of PHONE_SETTINGS_MEMBERS) {
+    const val = $('phone-'+fbKey(name)).value.trim();
+    if (val && !/^\+[1-9]\d{6,14}$/.test(val)) {
+      $('err-phone-settings').textContent = `El número de ${name} debe empezar con "+" y el código de país (ej: +51987654321).`;
+      return;
+    }
+    updates[fbKey(name)] = val || null;
+  }
+  try {
+    await fbDb.ref('phoneNumbers').update(updates);
+    closePhoneSettings();
+  } catch(e) {
+    $('err-phone-settings').textContent = 'Error al guardar: '+e.message;
+  }
 }
 
 function renderKiomiMessages(messages) {
