@@ -145,6 +145,22 @@ móviles, pero en algunas combinaciones de red (datos móviles restrictivos
 de los dos lados, por ejemplo) la llamada puede no lograr conectar. Si eso
 pasa seguido, se puede agregar un servidor TURN más adelante.
 
+## Indicadores de lectura en el chat familiar
+
+Cada mensaje del chat familiar muestra 4 puntitos (Koji, Ami, Mamá, Papá):
+verde si esa persona ya vio el mensaje, amarillo si todavía no. Se
+actualizan en vivo — no hace falta recargar la app.
+
+## Si el número del ícono deja de actualizarse
+
+Si funcionó una vez y después dejó de avisar con la app cerrada, es porque
+el navegador seguía usando una versión vieja y cacheada de
+`firebase-messaging-sw.js` (sin la corrección de badge que se hizo). Ya se
+agregó `skipWaiting()`/`clients.claim()` para que la versión nueva tome el
+control enseguida, pero por las dudas: **cerrá completamente la app (o el
+navegador) y volvé a abrirla** después de actualizar el código, así el
+service worker nuevo se activa del todo.
+
 ## Si el audio no se reproduce en un iPhone
 
 Causa más común: Android graba las notas de voz en formato **WebM/Opus**,

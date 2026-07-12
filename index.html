@@ -192,6 +192,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   white-space:nowrap;flex-shrink:0}
 .msg-sender{font-size:11px;font-weight:700;color:var(--pink);padding:0 4px}
 .call-log{font-style:italic;opacity:.85}
+.receipts{display:flex;gap:3px;padding:1px 4px 0}
+.msg-row.out .receipts{justify-content:flex-end}
+.msg-row.in .receipts{justify-content:flex-start}
+.receipt-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.receipt-dot.read{background:#22c55e}
+.receipt-dot.unread{background:#eab308}
 .bubble.media{padding:4px;background:var(--in-bg)}
 .msg-row.out .bubble.media{background:rgba(255,255,255,.2)}
 .msg-img{max-width:220px;max-height:280px;border-radius:12px;display:block;object-fit:cover;cursor:pointer}
@@ -678,7 +684,7 @@ function logout() {
 // ══════════════════════════════════════════
 //  RENDER DE MENSAJES (compartido guest/Kiomi/familia)
 // ══════════════════════════════════════════
-function renderMessages(box, messages, {showSender=false, emptyHtml=''}={}) {
+function renderMessages(box, messages, {showSender=false, emptyHtml='', showReadReceipts=false}={}) {
   if(!messages.length){ box.innerHTML=emptyHtml; return; }
   let html='', lastDate=null;
   messages.forEach(m=>{
@@ -695,10 +701,25 @@ function renderMessages(box, messages, {showSender=false, emptyHtml=''}={}) {
       ${showSender&&!isMe?`<div class="msg-sender">${esc(m.from)}</div>`:''}
       <div class="bubble${isMedia?' media':''}">${inner}</div>
       <div class="msg-time">${fmtTime(m.ts)}</div>
+      ${showReadReceipts?readReceiptsHtml(m):''}
     </div>`;
   });
   box.innerHTML=html;
   scrollToBottom(box);
+}
+
+// 4 bolitas (Koji, Ami, Mamá, Papá) por mensaje del chat familiar: verde si
+// esa persona ya vio el mensaje (su lastSeen de __family__ es posterior),
+// amarillo si todavía no.
+const READ_RECEIPT_MEMBERS = ['Koji','Ami','Mamá','Papá'];
+let familyLastSeenMap = {}; // { Koji: ts, Ami: ts, 'Mamá': ts, 'Papá': ts }
+
+function readReceiptsHtml(m) {
+  const dots = READ_RECEIPT_MEMBERS.map(name => {
+    const read = name===m.from || (familyLastSeenMap[name]||0) >= m.ts;
+    return `<span class="receipt-dot ${read?'read':'unread'}" title="${esc(name)}: ${read?'leído':'no leído'}"></span>`;
+  }).join('');
+  return `<div class="receipts">${dots}</div>`;
 }
 
 function scrollToBottom(box) {
@@ -717,6 +738,7 @@ function enterGuestChat() {
   attachPresence();
   attachGuestBadge();
   attachIncomingCallListener();
+  if (isFamilyMember(myName)) attachFamilyReceipts();
   silentlyInitPush();
 }
 
@@ -751,7 +773,7 @@ function renderGuestMessages(messages) {
   const empty = guestMode==='family'
     ? '<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);margin-top:40px"><div style="font-size:48px">👨‍👩‍👧‍👦</div><p style="font-size:14px">Sé el primero en escribir en el chat familiar</p></div>'
     : '<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);margin-top:40px"><div style="font-size:48px">🌸</div><p style="font-size:14px">Escríbele a Kiomi para empezar</p></div>';
-  renderMessages($('g-messages'), messages, { showSender: guestMode==='family', emptyHtml: empty });
+  renderMessages($('g-messages'), messages, { showSender: guestMode==='family', showReadReceipts: guestMode==='family', emptyHtml: empty });
 }
 
 async function guestSend() {
@@ -795,6 +817,7 @@ function enterKiomiChat() {
   });
   attachPresence();
   attachIncomingCallListener();
+  attachFamilyReceipts();
   silentlyInitPush();
 }
 
@@ -911,6 +934,7 @@ function closeMobileChat() {
 function renderKiomiMessages(messages) {
   renderMessages($('k-messages'), messages, {
     showSender: activeConv==='__family__',
+    showReadReceipts: activeConv==='__family__',
     emptyHtml: '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px">Sin mensajes aún</div>'
   });
 }
@@ -1081,6 +1105,25 @@ function recomputeGuestBadge() {
   const kDot = $('g-tab-kiomi-dot'), fDot = $('g-tab-family-dot');
   if (kDot) { kDot.textContent = ownUnread>9?'9+':ownUnread; kDot.style.display = ownUnread>0 ? '' : 'none'; }
   if (fDot) { fDot.textContent = famUnread>9?'9+':famUnread; fDot.style.display = famUnread>0 ? '' : 'none'; }
+}
+
+// Escucha cuándo vio cada miembro de la familia el chat grupal por última
+// vez, y vuelve a pintar los mensajes con los puntitos de lectura al día.
+function attachFamilyReceipts() {
+  fbDb.ref('lastSeen').on('value', async snap => {
+    const all = snap.val() || {};
+    READ_RECEIPT_MEMBERS.forEach(name => {
+      familyLastSeenMap[name] = (all[fbKey(name)] || {})['__family__'] || 0;
+    });
+    if (!isKiomi && guestMode==='family') {
+      const msgsSnap = await fbDb.ref(FAMILY_PATH+'/messages').once('value');
+      const val = msgsSnap.val()||{};
+      const messages = Object.entries(val).map(([id,m])=>({...m,id})).sort((a,b)=>a.ts-b.ts);
+      renderGuestMessages(messages);
+    } else if (isKiomi && activeConv==='__family__') {
+      renderKiomiMessages(convCache['__family__']?.messages||[]);
+    }
+  });
 }
 
 // Suena un timbre sintetizado (sin archivo de audio) y vibra (Android;
@@ -1383,6 +1426,7 @@ async function initPush(silent=false) {
   }
   try {
     const reg  = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+    reg.update().catch(()=>{}); // fuerza a revisar si hay una versión más nueva del service worker
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') { if (!silent) alert('No se activaron las notificaciones.'); return; }
     const messaging = firebase.messaging();
