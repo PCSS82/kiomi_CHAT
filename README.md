@@ -130,8 +130,19 @@ llamada (sonando o en curso) se pone **verde** y parpadea. Al llamar:
 
 - El otro lado ve, sin importar en qué pantalla de la app esté en ese
   momento, una pantalla de llamada entrante con opción de contestar (📹) o
-  rechazar (📞), y suena un timbre + vibra (Android; en iPhone no es
-  posible vibrar desde una web) mientras la app esté abierta.
+  rechazar (📞), y suena un timbre (archivo real, `public/sounds/ringtone.wav`,
+  en loop) + vibra (Android; en iPhone no es posible vibrar desde una web)
+  mientras la app esté abierta. El timbre usa un `<audio>` real (no un tono
+  generado por código) más la Media Session API — los navegadores tratan
+  eso como reproducción de música/podcast, así que en Android es bastante
+  más resistente a silenciarse solo al pasar la app a segundo plano (otra
+  app abierta, pantalla apagada) que un sonido generado con la Web Audio
+  API cruda. En iPhone esto **no** cambia el límite ya conocido: Safari
+  suspende la página (audio incluido) apenas se sale de verdad de la app.
+- Quien está llamando escucha un tono de "discado" (`public/sounds/ringback.wav`,
+  un "brrr… brrr…" clásico) mientras espera que el otro lado conteste —
+  distinto del timbre de llamada entrante, para que se note la diferencia
+  entre "estoy llamando" y "me están llamando".
 - Con la app cerrada, llega como notificación push para avisar que hay
   una llamada — al tocarla se abre la app.
 - Requiere la misma configuración de notificaciones push descrita arriba
@@ -186,6 +197,18 @@ que se instaló desde el navegador, sin excepción. Si en algún momento hace
 falta ese nivel de "suena como llamada de verdad", la única forma real es
 convertir la app en una app nativa (con Capacitor/React Native, por
 ejemplo) y publicarla en las tiendas — es un proyecto bastante más grande.
+
+## Borrar todo el historial y empezar de nuevo
+
+Kiomi tiene un botón 🗑️ arriba a la izquierda, en el panel de conversaciones,
+para borrar **todo** el historial de chats — texto, fotos, audios, y
+registros de llamadas — de todas las conversaciones (individuales y
+familiar) de una sola vez, y dejar un único mensaje de bienvenida ("Bienvenidos
+al chat de Kiomi ❤️❤️❤️") en el chat familiar como punto de partida.
+
+**Es irreversible** — no hay forma de recuperar lo borrado. Por eso, en vez
+de un simple aceptar/cancelar, pide escribir la palabra `BORRAR` (en
+mayúsculas) para confirmar, así es mucho más difícil tocarlo sin querer.
 
 ## Indicadores de lectura en el chat familiar
 
