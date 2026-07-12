@@ -1070,7 +1070,9 @@ function closePhoneSettings() {
 async function savePhoneNumbers() {
   const updates = {};
   for (const name of PHONE_SETTINGS_MEMBERS) {
-    const val = $('phone-'+fbKey(name)).value.trim();
+    // Tolera espacios/guiones al pegar un número (ej: "+51 922 079 020"),
+    // que es como la gente los copia normalmente.
+    const val = $('phone-'+fbKey(name)).value.trim().replace(/[\s-]/g, '');
     if (val && !/^\+[1-9]\d{6,14}$/.test(val)) {
       $('err-phone-settings').textContent = `El número de ${name} debe empezar con "+" y el código de país (ej: +51987654321).`;
       return;
