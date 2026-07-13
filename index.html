@@ -290,7 +290,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 <div class="screen wifi-block" id="s-wifi-block">
   <div class="icon">📵</div>
   <h2>Solo WiFi</h2>
-  <p>Kiomi, esta app solo funciona cuando estás conectada a WiFi.<br>Conéctate a tu red WiFi e inténtalo de nuevo.</p>
+  <p>Kiomi, el chat solo funciona cuando estás conectada a WiFi.<br>Conéctate a tu red WiFi e inténtalo de nuevo.</p>
+  <p class="gps-note">Tu ubicación se sigue compartiendo con la familia aunque no tengas WiFi, y puedes ver el mapa igual.</p>
+  <button class="btn" style="max-width:240px" onclick="openMap()">📍 Ver mapa familiar</button>
   <button class="btn" style="max-width:240px" onclick="checkWifiAndEnter()">Reintentar 🔄</button>
   <button class="btn-sec" style="max-width:240px" onclick="logout()">Salir</button>
 </div>
@@ -552,7 +554,7 @@ let guestMode = 'kiomi';        // 'kiomi' | 'family' — a quién le habla el g
 let guestListenerPath = null;   // ref actualmente escuchado en la vista guest
 let mediaRecorder=null, recordChunks=[], recordTimer=null, recordStartTs=0, recordStream=null;
 let locationWatchId = null, lastLocationWriteTs = 0;
-let gpsMap = null, gpsMarkers = {}, gpsLocationsRef = null;
+let gpsMap = null, gpsMarkers = {}, gpsLocationsRef = null, mapReturnScreen = null;
 
 function fbKey(name) {
   return String(name).replace(/[.#$\[\]\/]/g, '_');
@@ -2069,6 +2071,8 @@ function stopLocationSharing() {
 //  MAPA FAMILIAR
 // ══════════════════════════════════════════
 function openMap() {
+  const current = document.querySelector('.screen.active');
+  if (current && current.id !== 's-map') mapReturnScreen = current.id;
   show('s-map');
   if (!gpsMap) {
     gpsMap = L.map('gps-map').setView([0, 0], 2);
@@ -2085,7 +2089,7 @@ function openMap() {
 }
 
 function closeMap() {
-  show(isKiomi ? 's-kiomi-chat' : 's-guest-chat');
+  show(mapReturnScreen || (isKiomi ? 's-kiomi-chat' : 's-guest-chat'));
 }
 
 function timeAgo(ts) {
@@ -2176,6 +2180,9 @@ function renderPresence(users) {
 
 // Verificar WiFi para Kiomi y entrar
 function checkWifiAndEnter() {
+  // El GPS de Kiomi se comparte tenga o no WiFi — es precisamente cuando
+  // está afuera sin su red donde más falta hace poder encontrarla.
+  startLocationSharing();
   if (getConnectionType() === 'cellular') { show('s-wifi-block'); return; }
   enterKiomiChat();
 }
