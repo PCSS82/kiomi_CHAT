@@ -13,6 +13,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -263,6 +265,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .call-btn-header.call-live{background:#16a34a;animation:panic-blink-green 1s infinite}
 @keyframes panic-blink-green{0%,100%{background:#16a34a}50%{background:#15803d}}
 
+/* ── MAPA GPS FAMILIAR ── */
+#gps-map{width:100%;flex:1;min-height:0;background:#e9d5ff}
+.gps-pin{width:36px;height:36px;border-radius:50%;background:var(--grad);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;
+  border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);overflow:hidden}
+.gps-pin img{width:100%;height:100%;object-fit:cover}
+.leaflet-popup-content{font-family:inherit;font-size:13px;line-height:1.5}
+.gps-note{font-size:12px;color:var(--muted);max-width:340px;text-align:center;line-height:1.5}
+
 /* ── PESTAÑAS GUEST: Kiomi / Familia con no-leídos ── */
 .guest-tabs{display:none;gap:8px;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--border)}
 .guest-tab{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
@@ -320,7 +331,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 <div class="screen setup" id="s-guest">
   <img class="kiomi-avatar" src="public/icons/kiomi_icon.png" alt="Kiomi"/>
   <h1>¿Quién eres? 👋</h1>
-  <p>Toca tu nombre para entrar al chat con Kiomi.</p>
+  <p>Toca tu nombre para empezar. Un solo botón activa tu GPS y te entra al chat, así Kiomi siempre sabe dónde está cada uno.</p>
 
   <div class="family-grid">
     <button class="family-btn" onclick="quickEnter('Koji')">
@@ -353,7 +364,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 
   <input id="inp-guest-name" type="text" placeholder="Escribe tu nombre…" maxlength="20" autocomplete="off"/>
   <p class="err" id="err-guest"></p>
-  <button class="btn" onclick="enterGuest()">Entrar ✨</button>
+  <button class="btn" onclick="enterGuest()">Empezamos, con GPS 📍</button>
+  <p class="gps-note">Al entrar compartimos tu ubicación con la familia mientras tengas la app abierta, para que Kiomi pueda encontrarte si se pierde.</p>
   <button class="btn-sec" onclick="show('s-who')">← Atrás</button>
 </div>
 
@@ -378,6 +390,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <div class="hname"><span id="g-name-text">Kiomi 🌸</span> <span id="g-conn-badge"></span></div>
         <div class="hsub" id="g-status">Cargando…</div>
       </div>
+      <button class="settings-btn" onclick="openMap()" title="Ver dónde está la familia">📍</button>
       <button class="call-btn-header" id="g-call-btn" title="Videollamada a Kiomi">📱<span class="call-btn-label">OFF</span></button>
     </div>
     <div class="guest-tabs" id="g-tabs">
@@ -411,6 +424,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
         <img src="public/icons/kiomi_icon.png" alt="Kiomi"/>
         <span class="hname">Kiomi Chat</span>
         <span class="badge" id="k-unread-total" style="display:none">0</span>
+        <button class="settings-btn" onclick="openMap()" title="Ver dónde está la familia">📍</button>
         <button class="settings-btn" onclick="resetAllChats()" title="Borrar todo el historial y reiniciar">🗑️</button>
       </div>
       <div class="presence-bar" id="k-presence-bar" style="display:none"></div>
@@ -496,6 +510,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   </div>
 </div>
 
+<!-- ══ MAPA GPS FAMILIAR ══ -->
+<div class="screen" id="s-map" style="flex-direction:column">
+  <div class="chat-header">
+    <button class="back-btn" style="display:block" onclick="closeMap()">‹</button>
+    <div class="info">
+      <div class="hname">📍 Dónde está la familia</div>
+      <div class="hsub" id="map-status">Cargando ubicaciones…</div>
+    </div>
+  </div>
+  <div id="gps-map"></div>
+</div>
+
 <script>
 // ══════════════════════════════════════════
 //  CONFIG
@@ -509,6 +535,7 @@ const FAMILY_PATH   = 'conversations/__family__'; // chat grupal: Kiomi, Koji, A
 const FAMILY_MEMBERS= ['kiomi','koji','ami','mama','papa'];
 const MAX_RECORD_MS = 60000; // tope de duración de audio (60s) para no crecer demasiado en la BD
 const FCM_VAPID_KEY = 'PEGAR_AQUI_TU_VAPID_KEY_DE_FIREBASE'; // Configuración del proyecto → Cloud Messaging → Web Push certificates
+const LOCATION_THROTTLE_MS = 15000; // no escribas la ubicación en Firebase más seguido que esto
 
 // ══════════════════════════════════════════
 //  ESTADO
@@ -524,6 +551,8 @@ let presenceTimer = null;
 let guestMode = 'kiomi';        // 'kiomi' | 'family' — a quién le habla el guest ahora
 let guestListenerPath = null;   // ref actualmente escuchado en la vista guest
 let mediaRecorder=null, recordChunks=[], recordTimer=null, recordStartTs=0, recordStream=null;
+let locationWatchId = null, lastLocationWriteTs = 0;
+let gpsMap = null, gpsMarkers = {}, gpsLocationsRef = null;
 
 function fbKey(name) {
   return String(name).replace(/[.#$\[\]\/]/g, '_');
@@ -796,6 +825,7 @@ function logout() {
   if(!confirm('¿Salir del chat?')) return;
   stopFamilyRecording();
   stopRingtone();
+  stopLocationSharing();
   if (callState) endCall();
   if (familyCallState) leaveFamilyCall();
   if(fbDb){
@@ -804,9 +834,11 @@ function logout() {
     fbDb.ref('presence').off();
     fbDb.ref('calls').off();
     fbDb.ref('calls/family').off();
+    fbDb.ref('locations').off();
     if(guestListenerPath) fbDb.ref(guestListenerPath).off();
     fbDb.ref('.info/connected').off();
   }
+  gpsLocationsRef = null;
   clearInterval(presenceTimer);
   if (navigator.clearAppBadge) navigator.clearAppBadge().catch(()=>{});
   localStorage.removeItem('kc_name');
@@ -910,6 +942,7 @@ function scrollToBottom(box) {
 function enterGuestChat() {
   show('s-guest-chat');
   attachConnectionStatus('g-sync');
+  startLocationSharing();
   $('g-tabs').style.display = isFamilyMember(myName) ? 'flex' : 'none';
   switchGuestMode('kiomi');
   attachPresence();
@@ -987,6 +1020,7 @@ let kiomiLastSeenMap = {}; // cargado desde Firebase (lastSeen/Kiomi) — sobrev
 function enterKiomiChat() {
   show('s-kiomi-chat');
   attachConnectionStatus('k-sync');
+  startLocationSharing();
   fbDb.ref('lastSeen/Kiomi').on('value', snap=>{
     kiomiLastSeenMap = snap.val()||{};
     recomputeKiomiUnread();
@@ -2000,6 +2034,93 @@ function connBadgeHtml(conn) {
   if (conn === 'cellular')
     return `<span class="conn-badge conn-cell"><span class="online-dot dot-cell"></span>Datos</span>`;
   return `<span class="conn-badge conn-off"><span class="online-dot dot-off"></span>?</span>`;
+}
+
+// ══════════════════════════════════════════
+//  UBICACIÓN GPS — siempre activa mientras la app está abierta
+// ══════════════════════════════════════════
+// Comparte la posición de quien tenga la app abierta (Kiomi o cualquier
+// familiar) en Firebase, igual que la presencia: se borra sola con
+// onDisconnect() apenas se cierra la app, así el mapa solo muestra a quien
+// de verdad la tiene abierta en ese momento.
+function startLocationSharing() {
+  if (!navigator.geolocation || locationWatchId !== null) return;
+  const ref = fbDb.ref('locations/'+fbKey(myName));
+  ref.onDisconnect().remove();
+  locationWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      const now = Date.now();
+      if (now - lastLocationWriteTs < LOCATION_THROTTLE_MS) return;
+      lastLocationWriteTs = now;
+      ref.set({ name: myName, lat: pos.coords.latitude, lng: pos.coords.longitude, ts: now });
+    },
+    () => {}, // sin permiso o sin señal GPS: el chat sigue funcionando igual
+    { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+  );
+}
+
+function stopLocationSharing() {
+  if (locationWatchId !== null) { navigator.geolocation.clearWatch(locationWatchId); locationWatchId = null; }
+  lastLocationWriteTs = 0;
+  if (fbDb && myName) fbDb.ref('locations/'+fbKey(myName)).remove();
+}
+
+// ══════════════════════════════════════════
+//  MAPA FAMILIAR
+// ══════════════════════════════════════════
+function openMap() {
+  show('s-map');
+  if (!gpsMap) {
+    gpsMap = L.map('gps-map').setView([0, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OpenStreetMap'
+    }).addTo(gpsMap);
+  } else {
+    setTimeout(() => gpsMap.invalidateSize(), 100);
+  }
+  if (!gpsLocationsRef) {
+    gpsLocationsRef = fbDb.ref('locations');
+    gpsLocationsRef.on('value', snap => renderGpsMarkers(snap.val()||{}));
+  }
+}
+
+function closeMap() {
+  show(isKiomi ? 's-kiomi-chat' : 's-guest-chat');
+}
+
+function timeAgo(ts) {
+  const s = Math.floor((Date.now()-ts)/1000);
+  if (s < 60) return 'ahora mismo';
+  if (s < 3600) return `hace ${Math.floor(s/60)} min`;
+  if (s < 86400) return `hace ${Math.floor(s/3600)} h`;
+  return `hace ${Math.floor(s/86400)} días`;
+}
+
+function renderGpsMarkers(locs) {
+  const seen = new Set();
+  const bounds = [];
+  Object.values(locs).forEach(loc => {
+    if (!loc || loc.lat==null || loc.lng==null) return;
+    const key = fbKey(loc.name);
+    seen.add(key);
+    bounds.push([loc.lat, loc.lng]);
+    const popupHtml = `<b>${esc(loc.name)}</b><br>${timeAgo(loc.ts)}<br>
+      <a href="https://www.google.com/maps/dir/?api=1&destination=${loc.lat},${loc.lng}" target="_blank" rel="noopener">Cómo llegar 🧭</a>`;
+    if (gpsMarkers[key]) {
+      gpsMarkers[key].setLatLng([loc.lat, loc.lng]);
+      gpsMarkers[key].getPopup().setContent(popupHtml);
+    } else {
+      const icon = L.divIcon({ className:'gps-pin', html: avatarHtml(loc.name), iconSize:[36,36], iconAnchor:[18,18], popupAnchor:[0,-18] });
+      gpsMarkers[key] = L.marker([loc.lat, loc.lng], { icon }).addTo(gpsMap).bindPopup(popupHtml);
+    }
+  });
+  Object.keys(gpsMarkers).forEach(key => {
+    if (!seen.has(key)) { gpsMap.removeLayer(gpsMarkers[key]); delete gpsMarkers[key]; }
+  });
+  $('map-status').textContent = bounds.length
+    ? `${bounds.length} de la familia compartiendo ubicación`
+    : 'Nadie ha compartido su ubicación todavía';
+  if (bounds.length) gpsMap.fitBounds(bounds, { padding:[40,40], maxZoom:16 });
 }
 
 // Muestra si el WebSocket con Firebase está conectado, en vivo
