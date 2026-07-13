@@ -467,6 +467,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   <!-- Tono de "discado" (ringback) para quien llama, mientras espera que
        contesten — ver playRingback()/stopRingback(). -->
   <audio id="ringback-audio" src="public/sounds/ringback.wav" loop preload="auto"></audio>
+  <!-- Beep corto para avisar de un mensaje nuevo mientras la app está en
+       primer plano (ver playBeep() más abajo) — no suena nunca en segundo
+       plano ni con la app cerrada: eso solo lo puede avisar una
+       notificación push real del sistema, no un <audio> de la página. -->
+  <audio id="beep-audio" src="public/sounds/beep.wav" preload="auto"></audio>
   <div class="call-panel">
     <video id="call-remote-video" autoplay playsinline></video>
     <video id="call-local-video" autoplay playsinline muted></video>
@@ -591,7 +596,7 @@ let audioUnlocked = false;
 function unlockAudioOnce() {
   if (audioUnlocked) return;
   audioUnlocked = true;
-  [$('ringtone-audio'), $('ringback-audio')].forEach(audio => {
+  [$('ringtone-audio'), $('ringback-audio'), $('beep-audio')].forEach(audio => {
     if (!audio) return;
     audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(() => {});
   });
@@ -809,6 +814,7 @@ function logout() {
   myName=''; isKiomi=false; activeConv=null; convCache={};
   guestMode='kiomi'; guestListenerPath=null;
   familyIncomingShown=false; familyCallDismissed=null; familySeeded=false;
+  kiomiUnreadInited=false; lastKiomiUnreadTotal=0; guestUnreadInited=false; lastGuestUnreadTotal=0;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   show('s-who');
 }
@@ -1004,6 +1010,13 @@ function enterKiomiChat() {
   silentlyInitPush();
 }
 
+// Para el beep: solo debe sonar cuando el total de no-leídos SUBE (llegó
+// algo nuevo), nunca cuando baja (se marcó como leído) ni en el primer
+// cálculo al entrar (que puede arrancar con no-leídos ya existentes de
+// antes, y ahí no hay nada "nuevo" que avisar).
+let lastKiomiUnreadTotal = 0;
+let kiomiUnreadInited = false;
+
 function recomputeKiomiUnread() {
   const data  = kiomiConvsData;
   const names = Object.keys(data);
@@ -1030,6 +1043,9 @@ function recomputeKiomiUnread() {
   if (navigator.setAppBadge) {
     (unreadTotal>0 ? navigator.setAppBadge(unreadTotal) : navigator.clearAppBadge()).catch(()=>{});
   }
+  if (kiomiUnreadInited && unreadTotal > lastKiomiUnreadTotal) playBeep();
+  kiomiUnreadInited = true;
+  lastKiomiUnreadTotal = unreadTotal;
 }
 
 function renderConvList() {
@@ -1278,15 +1294,21 @@ function attachGuestBadge() {
   });
 }
 
+let lastGuestUnreadTotal = 0;
+let guestUnreadInited = false;
+
 function recomputeGuestBadge() {
   const ownLastSeen = guestLastSeenMap[fbKey(myName)] || 0;
   const famLastSeen = guestLastSeenMap['__family__'] || 0;
   const ownUnread = guestBadgeMsgs.own.filter(m=>m.from!==myName && m.ts>ownLastSeen).length;
   const famUnread = guestBadgeMsgs.family.filter(m=>m.from!==myName && m.ts>famLastSeen).length;
+  const total = ownUnread + famUnread;
   if (navigator.setAppBadge) {
-    const total = ownUnread + famUnread;
     (total>0 ? navigator.setAppBadge(total) : navigator.clearAppBadge()).catch(()=>{});
   }
+  if (guestUnreadInited && total > lastGuestUnreadTotal) playBeep();
+  guestUnreadInited = true;
+  lastGuestUnreadTotal = total;
   const kDot = $('g-tab-kiomi-dot'), fDot = $('g-tab-family-dot');
   if (kDot) { kDot.textContent = ownUnread>9?'9+':ownUnread; kDot.style.display = ownUnread>0 ? '' : 'none'; }
   if (fDot) { fDot.textContent = famUnread>9?'9+':famUnread; fDot.style.display = famUnread>0 ? '' : 'none'; }
@@ -1369,6 +1391,20 @@ function playRingback() {
 function stopRingback() {
   const audio = $('ringback-audio');
   if (audio) { audio.pause(); audio.currentTime = 0; }
+}
+
+// Beep corto para avisar de un mensaje nuevo. Solo tiene sentido llamarlo
+// con la app en primer plano: un <audio> de la página no puede sonar con
+// la pestaña en segundo plano ni con la app cerrada (el navegador
+// suspende la ejecución de JS ahí) — para eso existiría una notificación
+// push real, con el sonido que decida el sistema, no este archivo.
+function playBeep() {
+  if (!isAppVisible()) return;
+  const audio = $('beep-audio');
+  if (audio) {
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  }
 }
 
 // ══════════════════════════════════════════
