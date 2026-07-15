@@ -395,6 +395,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       <button class="settings-btn" onclick="openMap()" title="Ver dónde está la familia">📍</button>
       <button class="call-btn-header" id="g-call-btn" title="Videollamada a Kiomi">📱<span class="call-btn-label">OFF</span></button>
     </div>
+    <div class="presence-bar" id="g-presence-bar" style="display:none"></div>
     <div class="guest-tabs" id="g-tabs">
       <button class="guest-tab active" id="g-tab-kiomi" onclick="switchGuestMode('kiomi')">
         💬 Kiomi<span class="tab-dot" id="g-tab-kiomi-dot" style="display:none"></span>
@@ -2148,23 +2149,33 @@ function attachPresence() {
   fbDb.ref('presence').on('value', snap => renderPresence(snap.val()||{}));
 }
 
-// Los 4 integrantes de la familia se muestran siempre en el encabezado de
-// Kiomi (no solo cuando están conectados), con el avatar enmarcado en
-// verde si están en línea ahora mismo o amarillo si no — como la lista de
-// amigos de un juego online, en vez de un signo de interrogación cuando el
-// navegador no sabe decir si es WiFi o datos.
+// Todos los integrantes de la familia (Kiomi, Koji, Ami, Mamá, Papá) se
+// muestran siempre, no solo cuando están conectados, con el avatar
+// enmarcado en verde si están en línea ahora mismo o amarillo si no —
+// como la lista de amigos de un juego online. La misma barra se ve igual
+// para Kiomi que para cualquier otro (invitado o familiar): cada quien ve
+// a todos menos a sí mismo.
+const FAMILY_PRESENCE_LIST = ['Kiomi', ...READ_RECEIPT_MEMBERS];
+
+function presenceItemHtml(name, online) {
+  return `<div class="presence-item" title="${esc(name)} · ${online?'en línea':'sin conexión'}">
+    <div class="presence-avatar ${online?'online':''}">${avatarHtml(name)}</div>
+    <span>${esc(name)}</span>
+  </div>`;
+}
+
 function renderPresence(users) {
   if (isKiomi) {
     const bar = $('k-presence-bar');
     bar.style.display = 'flex';
-    bar.innerHTML = READ_RECEIPT_MEMBERS.map(name => {
-      const online = !!users[name];
-      return `<div class="presence-item" title="${esc(name)} · ${online?'en línea':'sin conexión'}">
-        <div class="presence-avatar ${online?'online':''}">${avatarHtml(name)}</div>
-        <span>${esc(name)}</span>
-      </div>`;
-    }).join('');
+    bar.innerHTML = READ_RECEIPT_MEMBERS.map(name => presenceItemHtml(name, !!users[name])).join('');
   } else {
+    const gBar = $('g-presence-bar');
+    if (gBar) {
+      const list = FAMILY_PRESENCE_LIST.filter(name => normName(name) !== normName(myName));
+      gBar.style.display = 'flex';
+      gBar.innerHTML = list.map(name => presenceItemHtml(name, !!users[name])).join('');
+    }
     const kiomiEntry = users['Kiomi'];
     const badge = $('g-conn-badge');
     if (!badge) return;
