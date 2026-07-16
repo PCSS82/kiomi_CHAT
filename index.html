@@ -272,6 +272,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;
   border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);overflow:hidden}
 .gps-pin img{width:100%;height:100%;object-fit:cover}
+.gps-pin-stale{opacity:.55;filter:grayscale(.5)}
 .leaflet-popup-content{font-family:inherit;font-size:13px;line-height:1.5}
 .gps-note{font-size:12px;color:var(--muted);max-width:340px;text-align:center;line-height:1.5}
 
@@ -540,6 +541,7 @@ const FAMILY_MEMBERS= ['kiomi','koji','ami','mama','papa'];
 const MAX_RECORD_MS = 60000; // tope de duración de audio (60s) para no crecer demasiado en la BD
 const FCM_VAPID_KEY = 'PEGAR_AQUI_TU_VAPID_KEY_DE_FIREBASE'; // Configuración del proyecto → Cloud Messaging → Web Push certificates
 const LOCATION_THROTTLE_MS = 15000; // no escribas la ubicación en Firebase más seguido que esto
+const STALE_LOCATION_MS = 20 * 60000; // a partir de acá se marca como "última vez visto" en el mapa
 
 // ══════════════════════════════════════════
 //  ESTADO
@@ -2044,13 +2046,16 @@ function connBadgeHtml(conn) {
 //  UBICACIÓN GPS — siempre activa mientras la app está abierta
 // ══════════════════════════════════════════
 // Comparte la posición de quien tenga la app abierta (Kiomi o cualquier
-// familiar) en Firebase, igual que la presencia: se borra sola con
-// onDisconnect() apenas se cierra la app, así el mapa solo muestra a quien
-// de verdad la tiene abierta en ese momento.
+// familiar) en Firebase. A propósito NO se borra sola al perder la
+// conexión (a diferencia de la presencia "en línea"): el celular corta el
+// WebSocket todo el tiempo con la app igual abierta -pantalla bloqueada,
+// segundo plano, señal débil-, y ahí es justo cuando más importa seguir
+// viendo dónde estaba cada quien por última vez, en vez de que desaparezca
+// del mapa. renderGpsMarkers()/timeAgo() ya muestran hace cuánto es ese
+// dato, así se nota si está desactualizado.
 function startLocationSharing() {
   if (!navigator.geolocation || locationWatchId !== null) return;
   const ref = fbDb.ref('locations/'+fbKey(myName));
-  ref.onDisconnect().remove();
   locationWatchId = navigator.geolocation.watchPosition(
     pos => {
       const now = Date.now();
@@ -2105,18 +2110,21 @@ function timeAgo(ts) {
 function renderGpsMarkers(locs) {
   const seen = new Set();
   const bounds = [];
+  const now = Date.now();
   Object.values(locs).forEach(loc => {
     if (!loc || loc.lat==null || loc.lng==null) return;
     const key = fbKey(loc.name);
     seen.add(key);
     bounds.push([loc.lat, loc.lng]);
-    const popupHtml = `<b>${esc(loc.name)}</b><br>${timeAgo(loc.ts)}<br>
+    const stale = (now - loc.ts) > STALE_LOCATION_MS;
+    const popupHtml = `<b>${esc(loc.name)}</b><br>${stale ? 'Última vez visto: ' : ''}${timeAgo(loc.ts)}<br>
       <a href="https://www.google.com/maps/dir/?api=1&destination=${loc.lat},${loc.lng}" target="_blank" rel="noopener">Cómo llegar 🧭</a>`;
+    const icon = L.divIcon({ className:'gps-pin'+(stale?' gps-pin-stale':''), html: avatarHtml(loc.name), iconSize:[36,36], iconAnchor:[18,18], popupAnchor:[0,-18] });
     if (gpsMarkers[key]) {
       gpsMarkers[key].setLatLng([loc.lat, loc.lng]);
+      gpsMarkers[key].setIcon(icon);
       gpsMarkers[key].getPopup().setContent(popupHtml);
     } else {
-      const icon = L.divIcon({ className:'gps-pin', html: avatarHtml(loc.name), iconSize:[36,36], iconAnchor:[18,18], popupAnchor:[0,-18] });
       gpsMarkers[key] = L.marker([loc.lat, loc.lng], { icon }).addTo(gpsMap).bindPopup(popupHtml);
     }
   });
