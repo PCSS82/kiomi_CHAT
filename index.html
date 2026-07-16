@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, interactive-widget=resizes-content"/>
 <title>Kiomi Chat 🌸</title>
 <link rel="manifest" href="public/manifest.json"/>
-<meta name="theme-color" content="#7c3aed"/>
+<meta name="theme-color" content="#3d4471"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-title" content="Kiomi Chat"/>
 <link rel="apple-touch-icon" href="public/icons/kiomi_icon.png"/>
@@ -18,18 +18,19 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --purple:#7c3aed;--pink:#ec4899;--grad:linear-gradient(135deg,#7c3aed,#ec4899);
-  --bg:#f5f3ff;--card:#fff;--border:#e9d5ff;
-  --text:#1e0a3c;--muted:#7c3aed;
-  --out-bg:linear-gradient(135deg,#7c3aed,#ec4899);--out-text:#fff;
-  --in-bg:#fff;--in-text:#1e0a3c;
-  --input-bg:#f5f3ff;--header:#7c3aed;
+  /* Paleta basada en el color favorito de Kiomi (#8d92b2) */
+  --purple:#515990;--pink:#7a81ae;--grad:linear-gradient(135deg,#515990,#7a81ae);
+  --bg:#f3f4f9;--card:#fff;--border:#cfd2e8;
+  --text:#1d2034;--muted:#515990;
+  --out-bg:linear-gradient(135deg,#515990,#7a81ae);--out-text:#fff;
+  --in-bg:#fff;--in-text:#1d2034;
+  --input-bg:#f3f4f9;--header:#3d4471;
 }
 @media(prefers-color-scheme:dark){:root{
-  --bg:#12071f;--card:#1e0a3c;--border:#4c1d95;
-  --text:#fdf4ff;--muted:#c4b5fd;
-  --in-bg:#2d1254;--in-text:#fdf4ff;
-  --input-bg:#2d1254;--header:#4c1d95;
+  --bg:#0d0f1c;--card:#191c31;--border:#373d62;
+  --text:#f0f0f5;--muted:#adb1cd;
+  --in-bg:#252941;--in-text:#f0f0f5;
+  --input-bg:#252941;--header:#2e3456;
 }}
 html{height:100%;overflow:hidden}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -47,7 +48,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 /* ── SETUP ── */
 .setup{flex-direction:column;align-items:center;justify-content:center;padding:28px 20px;gap:14px;background:var(--bg)}
 .kiomi-avatar{width:110px;height:110px;border-radius:50%;object-fit:cover;
-  box-shadow:0 0 0 4px var(--bg),0 0 0 7px var(--pink),0 0 24px rgba(236,72,153,.4)}
+  box-shadow:0 0 0 4px var(--bg),0 0 0 7px var(--pink),0 0 24px rgba(122,129,174,.4)}
 .setup h1{font-size:26px;font-weight:800;background:var(--grad);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center}
 .setup p{color:var(--muted);font-size:14px;text-align:center;max-width:320px;line-height:1.5}
@@ -73,7 +74,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   display:flex;align-items:center;gap:10px}
 .sidebar-header img{width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.4)}
 .sidebar-header .hname{font-weight:700;font-size:15px;flex:1}
-.sidebar-header .badge{background:#ec4899;color:#fff;border-radius:10px;
+.sidebar-header .badge{background:#7a81ae;color:#fff;border-radius:10px;
   font-size:11px;font-weight:700;padding:2px 7px}
 .settings-btn{background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;
   border-radius:50%;cursor:pointer;font-size:15px;flex-shrink:0}
@@ -146,7 +147,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .send-btn{width:44px;height:44px;border-radius:50%;background:var(--grad);
   border:none;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 2px 8px rgba(124,58,237,.4);transition:transform .1s}
+  box-shadow:0 2px 8px rgba(81,89,144,.4);transition:transform .1s}
 .send-btn:active{transform:scale(.92)}
 .send-btn:disabled{opacity:.4;cursor:default}
 
@@ -201,7 +202,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 
 /* ── CHAT FAMILIAR (grupo) ── */
 .family-pin{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;
-  transition:background .15s;background:linear-gradient(135deg,rgba(124,58,237,.08),rgba(236,72,153,.08));
+  transition:background .15s;background:linear-gradient(135deg,rgba(81,89,144,.08),rgba(122,129,174,.08));
   border-bottom:2px solid var(--border)}
 .family-pin:hover,.family-pin.active{background:var(--bg)}
 .family-tab-btn{background:rgba(255,255,255,.15);border:none;color:#fff;
@@ -231,11 +232,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   border-radius:16px;cursor:pointer;font-size:15px;flex-shrink:0;
   display:flex;align-items:center;gap:4px;white-space:nowrap}
 .call-btn-header .call-btn-label{font-size:9px;font-weight:800;letter-spacing:.3px}
-.call-panel{position:relative;width:100%;height:100dvh;background:#0b0614;overflow:hidden;
+.call-panel{position:relative;width:100%;height:100dvh;background:#060811;overflow:hidden;
   display:flex;flex-direction:column;align-items:center;justify-content:center}
-#call-remote-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#0b0614}
+#call-remote-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#060811}
 #call-local-video{position:absolute;bottom:110px;right:16px;width:100px;height:140px;border-radius:14px;
-  object-fit:cover;background:#1e0a3c;border:2px solid rgba(255,255,255,.3);z-index:2}
+  object-fit:cover;background:#191c31;border:2px solid rgba(255,255,255,.3);z-index:2}
 .call-info{position:relative;z-index:2;text-align:center;color:#fff;margin-top:60px}
 .call-info .call-avatar{width:88px;height:88px;border-radius:50%;background:var(--grad);
   display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;
@@ -249,14 +250,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 .call-btn.call-btn-end{background:#dc2626;width:64px;height:64px;font-size:28px;
   transform:rotate(135deg)}
 .call-btn.call-btn-accept{background:#16a34a}
-.call-btn.off{background:rgba(255,255,255,.5);color:#1e0a3c}
+.call-btn.off{background:rgba(255,255,255,.5);color:#191c31}
 @keyframes ring-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 .call-info .call-avatar{animation:ring-pulse 1.4s infinite}
 
 /* Grilla de video para la llamada grupal familiar */
 .call-grid{position:absolute;inset:0;z-index:1;display:grid;gap:4px;padding:4px;
   grid-template-columns:repeat(2,1fr);align-content:center}
-.call-tile{position:relative;background:#1e0a3c;border-radius:10px;overflow:hidden;aspect-ratio:3/4}
+.call-tile{position:relative;background:#191c31;border-radius:10px;overflow:hidden;aspect-ratio:3/4}
 .call-tile-video{width:100%;height:100%;object-fit:cover}
 .call-tile-label{position:absolute;bottom:4px;left:6px;color:#fff;font-size:12px;font-weight:600;
   text-shadow:0 1px 3px rgba(0,0,0,.8)}
@@ -266,7 +267,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 @keyframes panic-blink-green{0%,100%{background:#16a34a}50%{background:#15803d}}
 
 /* ── MAPA GPS FAMILIAR ── */
-#gps-map{width:100%;flex:1;min-height:0;background:#e9d5ff}
+#gps-map{width:100%;flex:1;min-height:0;background:#dddfee}
 .gps-pin{width:36px;height:36px;border-radius:50%;background:var(--grad);color:#fff;
   display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;
   border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);overflow:hidden}

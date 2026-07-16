@@ -5,8 +5,8 @@
   "start_url": "../index.html",
   "scope": "../",
   "display": "standalone",
-  "background_color": "#7c3aed",
-  "theme_color": "#7c3aed",
+  "background_color": "#3d4471",
+  "theme_color": "#3d4471",
   "orientation": "portrait",
   "icons": [
     { "src": "icons/kiomi_icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
